@@ -5,6 +5,16 @@ const outputDiv = document.getElementById('output');
 const statusSpan = document.getElementById('status');
 const testDataHighlights = document.getElementById('testDataHighlights');
 const testDataHighlightContent = document.getElementById('testDataHighlightContent');
+const testDataLineNumbers = document.getElementById('testDataLineNumbers');
+const testDataLineNumberContent = document.getElementById('testDataLineNumberContent');
+const outputViewTableButton = document.getElementById('outputViewTable');
+const outputViewJsonButton = document.getElementById('outputViewJson');
+const testDataCopyButton = document.getElementById('testDataCopy');
+const testDataClearButton = document.getElementById('testDataClear');
+const outputCopyJsonButton = document.getElementById('outputCopyJson');
+let testDataMeasure = null;
+let outputViewMode = 'table';
+let lastResponseData = null;
 
 let availablePatterns = [];
 let autocompleteList = null;
@@ -50,9 +60,7 @@ function formatOutput(data) {
         </div>`;
     }
     
-    let html = `<div class="bg-green-50 border-l-4 border-green-500 p-4 rounded mb-4">
-        <strong class="text-green-800">✓ Pattern Matched! (${data.matched} of ${data.total} lines)</strong>
-    </div>`;
+    let html = '';
     
     // Color palette for field highlighting
     const fieldColors = [
@@ -92,23 +100,16 @@ function formatOutput(data) {
     });
     
     renderTestDataHighlights(data, fieldColorMap, orderedFields);
-    
-    const rawLines = testDataInput.value.split('\n');
-    const fallbackLines = rawLines.filter(line => line.trim());
+    if (outputViewMode === 'json') {
+        return html + renderJsonOutput(matches, orderedFields);
+    }
     
     // Show results for each matched line
     matches.forEach((match, index) => {
         const fields = match.fields || match;
-        const originalLine = getMatchLine(match, rawLines, fallbackLines[index] || '');
         
         html += `<div class="mb-5 bg-white rounded-lg overflow-hidden shadow-sm">`;
         html += `<div class="bg-indigo-600 text-white px-4 py-2 font-semibold text-sm">Match ${index + 1}</div>`;
-        
-        // Highlighted line preview
-        html += `<div class="p-3 bg-gray-50 border-b border-gray-200">`;
-        html += `<div class="font-mono text-xs leading-relaxed break-all">`;
-        html += highlightMatchedLine(originalLine, fields, fieldColorMap, { fieldOrder: orderedFields });
-        html += `</div></div>`;
         
         // Field table
         html += '<table class="w-full">';
@@ -233,6 +234,47 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function renderJsonOutput(matches, orderedFields) {
+    const orderedObjects = matches.map(match => {
+        const fields = match.fields || match;
+        const orderedEntries = buildOrderedEntries(fields, orderedFields);
+        const obj = {};
+        orderedEntries.forEach(([key, value]) => {
+            obj[key] = value;
+        });
+        return obj;
+    });
+
+    const jsonString = JSON.stringify(orderedObjects, null, 2);
+    return `<pre class="whitespace-pre-wrap break-words text-xs text-gray-800">${escapeHtml(jsonString)}</pre>`;
+}
+
+function getJsonOutputString(data) {
+    if (!data || !data.matches || data.matches.length === 0) {
+        return '';
+    }
+
+    const matches = data.matches || [];
+    const allFields = new Set();
+    matches.forEach(match => {
+        const fields = match.fields || match;
+        Object.keys(fields).forEach(key => allFields.add(key));
+    });
+    const orderedFields = buildFieldOrder(Array.isArray(data.fieldOrder) ? data.fieldOrder : [], allFields);
+
+    const orderedObjects = matches.map(match => {
+        const fields = match.fields || match;
+        const orderedEntries = buildOrderedEntries(fields, orderedFields);
+        const obj = {};
+        orderedEntries.forEach(([key, value]) => {
+            obj[key] = value;
+        });
+        return obj;
+    });
+
+    return JSON.stringify(orderedObjects, null, 2);
+}
+
 function buildFieldOrder(patternFieldOrder, fieldSet) {
     if (!patternFieldOrder || patternFieldOrder.length === 0) {
         return Array.from(fieldSet);
@@ -312,18 +354,6 @@ function resolveFieldType(field, value, fieldTypes) {
     return typeof value;
 }
 
-function getMatchLine(match, rawLines, fallbackLine) {
-    if (match && typeof match.line === 'string') {
-        return match.line;
-    }
-
-    if (match && Number.isInteger(match.lineIndex)) {
-        return rawLines[match.lineIndex] || '';
-    }
-
-    return fallbackLine;
-}
-
 function renderTestDataHighlights(data, fieldColorMap, fieldOrder = []) {
     if (!testDataHighlightContent) {
         return;
@@ -331,6 +361,7 @@ function renderTestDataHighlights(data, fieldColorMap, fieldOrder = []) {
 
     const colorMap = fieldColorMap || {};
     const lines = testDataInput.value.split('\n');
+    updateTestDataLineNumbers(lines);
     const matchByLine = new Map();
     const matches = data && Array.isArray(data.matches) ? data.matches : [];
     const hasLineIndexes = matches.some(match => Number.isInteger(match.lineIndex));
@@ -381,12 +412,67 @@ function syncTestDataHighlightScroll() {
     testDataHighlights.scrollLeft = testDataInput.scrollLeft;
 }
 
+function ensureTestDataMeasure() {
+    if (testDataMeasure) {
+        return testDataMeasure;
+    }
+
+    const measure = document.createElement('div');
+    measure.style.position = 'absolute';
+    measure.style.visibility = 'hidden';
+    measure.style.top = '-9999px';
+    measure.style.left = '-9999px';
+    measure.style.whiteSpace = 'pre-wrap';
+    measure.style.wordBreak = 'break-word';
+    measure.style.overflowWrap = 'break-word';
+    measure.style.padding = '0';
+    measure.style.margin = '0';
+    measure.style.border = '0';
+    measure.style.boxSizing = 'content-box';
+    document.body.appendChild(measure);
+    testDataMeasure = measure;
+    return measure;
+}
+
+function updateTestDataLineNumbers(lines) {
+    if (!testDataLineNumberContent) {
+        return;
+    }
+
+    const measure = ensureTestDataMeasure();
+    const style = getComputedStyle(testDataInput);
+    const lineHeight = parseFloat(style.lineHeight) || 0;
+    const paddingLeft = parseFloat(style.paddingLeft) || 0;
+    const paddingRight = parseFloat(style.paddingRight) || 0;
+    const contentWidth = Math.max(0, testDataInput.clientWidth - paddingLeft - paddingRight);
+
+    measure.style.font = style.font;
+    measure.style.letterSpacing = style.letterSpacing;
+    measure.style.lineHeight = style.lineHeight;
+    measure.style.width = `${contentWidth}px`;
+
+    const numbers = [];
+    lines.forEach((line, index) => {
+        const text = line === '' ? ' ' : line;
+        measure.textContent = text;
+        const height = measure.getBoundingClientRect().height;
+        const visualLines = lineHeight > 0 ? Math.max(1, Math.ceil(height / lineHeight)) : 1;
+        numbers.push(String(index + 1));
+        for (let i = 1; i < visualLines; i += 1) {
+            numbers.push('');
+        }
+    });
+
+    testDataLineNumberContent.textContent = numbers.join('\n');
+}
+
 function testPattern() {
     const pattern = patternInput.value.trim();
     const testData = testDataInput.value;
     const testDataTrimmed = testData.trim();
     
     if (!pattern || !testDataTrimmed) {
+        lastResponseData = null;
         outputDiv.innerHTML = '<div class="text-gray-500 text-center py-10 italic">Enter both a pattern and test data to see results...</div>';
         renderTestDataHighlights(null, {});
         updateStatus('Ready', 'info');
@@ -407,6 +493,7 @@ function testPattern() {
     })
     .then(response => response.json())
     .then(data => {
+        lastResponseData = data;
         outputDiv.innerHTML = formatOutput(data);
         if (data.success && data.matches && data.matches.length > 0) {
             updateStatus(`${data.matched}/${data.total} matched`, 'success');
@@ -417,6 +504,7 @@ function testPattern() {
         }
     })
     .catch(error => {
+        lastResponseData = null;
         outputDiv.innerHTML = `<div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
             <strong class="text-red-800">Request Error:</strong><br>
             <span class="text-red-700">${escapeHtml(error.message)}</span>
@@ -428,6 +516,7 @@ function testPattern() {
 
 function handleInput() {
     clearTimeout(debounceTimer);
+    updateTestDataLineNumbers(testDataInput.value.split('\n'));
     debounceTimer = setTimeout(testPattern, 300);
 }
 
@@ -580,11 +669,69 @@ function updateSelectedItem(items) {
     });
 }
 
+function setOutputViewMode(mode) {
+    outputViewMode = mode;
+    updateOutputViewButtons();
+    if (lastResponseData) {
+        outputDiv.innerHTML = formatOutput(lastResponseData);
+    }
+}
+
+function updateOutputViewButtons() {
+    if (!outputViewTableButton || !outputViewJsonButton) {
+        return;
+    }
+
+    if (outputViewMode === 'table') {
+        outputViewTableButton.className = 'px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-100';
+        outputViewJsonButton.className = 'px-3 py-1 text-xs font-semibold text-gray-600 hover:text-gray-800';
+    } else {
+        outputViewTableButton.className = 'px-3 py-1 text-xs font-semibold text-gray-600 hover:text-gray-800';
+        outputViewJsonButton.className = 'px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-100';
+    }
+}
+
 // Add event listeners
 patternInput.addEventListener('input', handlePatternInput);
 patternInput.addEventListener('keydown', handlePatternKeyDown);
 testDataInput.addEventListener('input', handleInput);
 testDataInput.addEventListener('scroll', syncTestDataHighlightScroll);
+if (outputViewTableButton && outputViewJsonButton) {
+    outputViewTableButton.addEventListener('click', () => setOutputViewMode('table'));
+    outputViewJsonButton.addEventListener('click', () => setOutputViewMode('json'));
+}
+if (testDataCopyButton) {
+    testDataCopyButton.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(testDataInput.value);
+        } catch (err) {
+            console.error('Failed to copy test data:', err);
+        }
+    });
+}
+if (testDataClearButton) {
+    testDataClearButton.addEventListener('click', () => {
+        testDataInput.value = '';
+        handleInput();
+    });
+}
+if (outputCopyJsonButton) {
+    outputCopyJsonButton.addEventListener('click', async () => {
+        const jsonString = getJsonOutputString(lastResponseData);
+        if (!jsonString) {
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(jsonString);
+        } catch (err) {
+            console.error('Failed to copy JSON output:', err);
+        }
+    });
+}
+window.addEventListener('resize', () => {
+    updateTestDataLineNumbers(testDataInput.value.split('\n'));
+});
 
 // Close autocomplete when clicking outside
 document.addEventListener('click', (e) => {
@@ -596,6 +743,7 @@ document.addEventListener('click', (e) => {
 // Load example on page load
 window.addEventListener('DOMContentLoaded', () => {
     loadPatternNames();
+    updateOutputViewButtons();
     patternInput.value = '%{IPORHOST:remote_addr} %{DATA:remote_host} %{DATA:remote_user} \\[%{DATA:timestamp}\\] "%{WORD:http_method} %{DATA:request} %{DATA:http_version}" %{INT:status} %{INT:body_bytes_sent} "%{DATA:http_referer}" "%{DATA:user_agent}"';
     testDataInput.value = `173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /zend/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"
 173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /ws/ec/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"

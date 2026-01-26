@@ -7,16 +7,16 @@
     <title>Grok Pattern Tester</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 p-5">
-    <div class="max-w-7xl mx-auto bg-white rounded-xl shadow-2xl p-8">
+<body class="h-screen overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 p-0">
+    <div class="w-full h-full bg-white shadow-none rounded-none p-6 lg:p-8 flex flex-col">
         <header class="text-center mb-8 pb-6 border-b-2 border-gray-200">
             <h1 class="text-4xl font-bold text-gray-800 mb-2">Grok Pattern Tester</h1>
-            <p class="text-lg text-gray-600">Test and debug grok patterns in real-time</p>
+            <p class="text-lg text-gray-600">Test and debug grok patterns</p>
         </header>
         
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5 min-h-[600px]">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5 flex-1 min-h-0">
             <!-- Left Column: Pattern + Test Data -->
-            <div class="flex flex-col gap-5">
+            <div class="flex flex-col gap-5 min-h-0">
                 <!-- Grok Pattern -->
                 <div class="flex flex-col" style="position: relative;">
                     <div class="flex justify-between items-center mb-2 px-3 py-2 bg-gray-100 rounded-lg">
@@ -38,20 +38,28 @@
                 </div>
                 
                 <!-- Test Data -->
-                <div class="flex flex-col flex-1">
+                <div class="flex flex-col flex-1 min-h-0">
                     <div class="flex justify-between items-center mb-2 px-3 py-2 bg-gray-100 rounded-lg">
                         <h2 class="text-lg font-semibold text-gray-800">Test Data</h2>
-                        <span class="text-sm text-gray-600">Sample log or text to parse</span>
+                        <div class="flex items-center gap-2">
+                            <button id="testDataCopy" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Copy</button>
+                            <button id="testDataClear" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Clear</button>
+                            <span class="text-sm text-gray-600">Sample log or text to parse</span>
+                        </div>
                     </div>
-                    <div class="relative flex flex-col flex-1 min-h-[350px] border-2 border-gray-300 rounded-lg bg-white transition-colors focus-within:border-indigo-500">
+                    <div class="relative flex flex-col flex-1 min-h-0 border-2 border-gray-300 rounded-lg bg-white transition-colors focus-within:border-indigo-500 overflow-hidden">
                         <div id="testDataHighlights" class="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
-                            <div id="testDataHighlightContent" class="p-4 font-mono text-sm leading-6 whitespace-pre-wrap break-words text-transparent"></div>
+                            <div id="testDataLineNumbers" class="absolute inset-y-0 left-0 w-12 border-r border-gray-200 bg-white">
+                                <div id="testDataLineNumberContent" class="p-4 pr-3 font-mono text-sm leading-6 text-right text-gray-400 whitespace-pre"></div>
+                            </div>
+                            <div id="testDataHighlightContent" class="p-4 pl-16 font-mono text-sm leading-6 whitespace-pre-wrap break-words text-transparent"></div>
                         </div>
                         <textarea 
                             id="testData" 
                             placeholder="Example: 192.168.1.1 GET /index.html"
+                            wrap="soft"
                             spellcheck="false"
-                            class="relative z-10 flex-1 w-full min-h-[350px] p-4 font-mono text-sm leading-6 resize-y bg-transparent focus:outline-none"
+                            class="relative z-10 flex-1 w-full min-h-0 p-4 pl-16 font-mono text-sm leading-6 resize-none bg-transparent focus:outline-none overflow-y-auto"
                         ></textarea>
                     </div>
                     <div class="mt-2 text-sm text-gray-600">
@@ -61,12 +69,19 @@
             </div>
             
             <!-- Right Column: Output -->
-            <div class="flex flex-col">
+            <div class="flex flex-col min-h-0">
                 <div class="flex justify-between items-center mb-2 px-3 py-2 bg-gray-100 rounded-lg">
                     <h2 class="text-lg font-semibold text-gray-800">Output</h2>
-                    <span id="status" class="text-sm font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-700">Ready</span>
+                    <div class="flex items-center gap-3">
+                        <div class="inline-flex rounded-md border border-gray-200 bg-white overflow-hidden">
+                            <button id="outputViewTable" class="px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-100">Table</button>
+                            <button id="outputViewJson" class="px-3 py-1 text-xs font-semibold text-gray-600 hover:text-gray-800">JSON</button>
+                        </div>
+                        <button id="outputCopyJson" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Copy JSON</button>
+                        <span id="status" class="text-sm font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-700">Ready</span>
+                    </div>
                 </div>
-                <div id="output" class="flex-1 p-4 border-2 border-gray-300 rounded-lg bg-gray-50 overflow-y-auto font-mono text-sm">
+                <div id="output" class="flex-1 min-h-0 p-4 border-2 border-gray-300 rounded-lg bg-gray-50 overflow-y-auto font-mono text-sm">
                     <div class="text-gray-500 text-center py-10 italic">
                         Results will appear here automatically as you type...
                     </div>
