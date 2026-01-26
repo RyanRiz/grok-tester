@@ -3,6 +3,8 @@ const patternInput = document.getElementById('pattern');
 const testDataInput = document.getElementById('testData');
 const outputDiv = document.getElementById('output');
 const statusSpan = document.getElementById('status');
+const testDataHighlights = document.getElementById('testDataHighlights');
+const testDataHighlightContent = document.getElementById('testDataHighlightContent');
 
 let availablePatterns = [];
 let autocompleteList = null;
@@ -32,6 +34,7 @@ function updateStatus(message, type = 'info') {
 
 function formatOutput(data) {
     if (!data.success) {
+        renderTestDataHighlights(data, {});
         return `<div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
             <strong class="text-red-800">Error:</strong><br>
             <span class="text-red-700">${escapeHtml(data.error)}</span>
@@ -39,6 +42,7 @@ function formatOutput(data) {
     }
     
     if (!data.matches || data.matches.length === 0) {
+        renderTestDataHighlights(data, {});
         return `<div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
             <strong class="text-yellow-800">No Match:</strong><br>
             <span class="text-yellow-700">${escapeHtml(data.error || 'Pattern did not match the test data')}</span>
@@ -55,33 +59,47 @@ function formatOutput(data) {
         { bg: 'bg-blue-100', text: 'text-blue-900', border: 'border-blue-300' },
         { bg: 'bg-green-100', text: 'text-green-900', border: 'border-green-300' },
         { bg: 'bg-purple-100', text: 'text-purple-900', border: 'border-purple-300' },
-        { bg: 'bg-pink-100', text: 'text-pink-900', border: 'border-pink-300' },
         { bg: 'bg-yellow-100', text: 'text-yellow-900', border: 'border-yellow-300' },
-        { bg: 'bg-indigo-100', text: 'text-indigo-900', border: 'border-indigo-300' },
         { bg: 'bg-red-100', text: 'text-red-900', border: 'border-red-300' },
         { bg: 'bg-orange-100', text: 'text-orange-900', border: 'border-orange-300' },
         { bg: 'bg-teal-100', text: 'text-teal-900', border: 'border-teal-300' },
         { bg: 'bg-cyan-100', text: 'text-cyan-900', border: 'border-cyan-300' },
+        { bg: 'bg-lime-100', text: 'text-lime-900', border: 'border-lime-300' },
+        { bg: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300' },
+        { bg: 'bg-fuchsia-100', text: 'text-fuchsia-900', border: 'border-fuchsia-300' },
+        { bg: 'bg-violet-100', text: 'text-violet-900', border: 'border-violet-300' },
+        { bg: 'bg-rose-100', text: 'text-rose-900', border: 'border-rose-300' },
+        { bg: 'bg-sky-100', text: 'text-sky-900', border: 'border-sky-300' },
     ];
+    
+    const matches = data.matches || [];
+    const fieldTypes = data.fieldTypes || {};
+    const patternFieldOrder = Array.isArray(data.fieldOrder) ? data.fieldOrder : [];
     
     // Get all unique field names across all matches
     const allFields = new Set();
-    data.matches.forEach(match => {
-        Object.keys(match).forEach(key => allFields.add(key));
+    matches.forEach(match => {
+        const fields = match.fields || match;
+        Object.keys(fields).forEach(key => allFields.add(key));
     });
     
+    const orderedFields = buildFieldOrder(patternFieldOrder, allFields);
+
     // Assign colors to fields
     const fieldColorMap = {};
-    Array.from(allFields).forEach((field, index) => {
+    orderedFields.forEach((field, index) => {
         fieldColorMap[field] = fieldColors[index % fieldColors.length];
     });
     
-    // Get test data lines
-    const testDataLines = testDataInput.value.split('\n').filter(line => line.trim());
+    renderTestDataHighlights(data, fieldColorMap, orderedFields);
+    
+    const rawLines = testDataInput.value.split('\n');
+    const fallbackLines = rawLines.filter(line => line.trim());
     
     // Show results for each matched line
-    data.matches.forEach((match, index) => {
-        const originalLine = testDataLines[index] || '';
+    matches.forEach((match, index) => {
+        const fields = match.fields || match;
+        const originalLine = getMatchLine(match, rawLines, fallbackLines[index] || '');
         
         html += `<div class="mb-5 bg-white rounded-lg overflow-hidden shadow-sm">`;
         html += `<div class="bg-indigo-600 text-white px-4 py-2 font-semibold text-sm">Match ${index + 1}</div>`;
@@ -89,7 +107,7 @@ function formatOutput(data) {
         // Highlighted line preview
         html += `<div class="p-3 bg-gray-50 border-b border-gray-200">`;
         html += `<div class="font-mono text-xs leading-relaxed break-all">`;
-        html += highlightMatchedLine(originalLine, match, fieldColorMap);
+        html += highlightMatchedLine(originalLine, fields, fieldColorMap, { fieldOrder: orderedFields });
         html += `</div></div>`;
         
         // Field table
@@ -97,10 +115,15 @@ function formatOutput(data) {
         html += '<thead><tr class="bg-gray-100"><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Field</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Value</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Type</th></tr></thead>';
         html += '<tbody>';
         
-        for (const [key, value] of Object.entries(match)) {
-            const type = typeof value;
-            const displayValue = value === null ? '<em class="text-gray-400">null</em>' : escapeHtml(String(value));
-            const colors = fieldColorMap[key];
+        const orderedEntries = buildOrderedEntries(fields, orderedFields);
+        for (const [key, value] of orderedEntries) {
+            const type = resolveFieldType(key, value, fieldTypes);
+            const isNull = value === null;
+            const displayValue = isNull ? '<em class="text-gray-400">null</em>' : escapeHtml(String(value));
+            const colors = fieldColorMap[key] || { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300' };
+            const valueTag = isNull
+                ? displayValue
+                : `<span class="inline-block px-2 py-1 rounded text-xs font-semibold ${colors.bg} ${colors.text} border ${colors.border} break-all">${displayValue}</span>`;
             
             html += `<tr class="border-b border-gray-200 hover:bg-gray-50">
                 <td class="px-3 py-2">
@@ -108,8 +131,8 @@ function formatOutput(data) {
                         ${escapeHtml(key)}
                     </span>
                 </td>
-                <td class="px-3 py-2 text-gray-800 break-all">${displayValue}</td>
-                <td class="px-3 py-2 text-gray-500 italic text-xs">${type}</td>
+                <td class="px-3 py-2 text-gray-800 break-all">${valueTag}</td>
+                <td class="px-3 py-2 text-gray-500 italic text-xs">${escapeHtml(type)}</td>
             </tr>`;
         }
         
@@ -119,26 +142,47 @@ function formatOutput(data) {
     return html;
 }
 
-function highlightMatchedLine(line, match, fieldColorMap) {
+function highlightMatchedLine(line, match, fieldColorMap, options = {}) {
     if (!line) return '';
     
     // Create an array of segments to highlight
     const segments = [];
+    const fieldOrder = Array.isArray(options.fieldOrder) ? options.fieldOrder : [];
+    const orderedFields = buildOrderedFields(match, fieldOrder);
     
     // For each field in the match, try to find it in the original line
-    for (const [field, value] of Object.entries(match)) {
+    let cursor = 0;
+    for (const field of orderedFields) {
+        const value = match[field];
         if (value === null || value === '') continue;
         
         const valueStr = String(value);
-        let startIndex = line.indexOf(valueStr);
+        let startIndex = line.indexOf(valueStr, cursor);
         
+        if (startIndex === -1) {
+            startIndex = line.indexOf(valueStr);
+        }
+
         if (startIndex !== -1) {
+            let endIndex = startIndex + valueStr.length;
+            if (segments.length > 0 && startIndex < segments[segments.length - 1].end) {
+                const nextIndex = line.indexOf(valueStr, segments[segments.length - 1].end);
+                if (nextIndex !== -1) {
+                    startIndex = nextIndex;
+                    endIndex = nextIndex + valueStr.length;
+                } else {
+                    continue;
+                }
+            }
+
             segments.push({
                 start: startIndex,
-                end: startIndex + valueStr.length,
+                end: endIndex,
                 field: field,
                 value: valueStr
             });
+
+            cursor = endIndex;
         }
     }
     
@@ -164,8 +208,13 @@ function highlightMatchedLine(line, match, fieldColorMap) {
         }
         
         // Add highlighted part
-        const colors = fieldColorMap[seg.field];
-        result += `<span class="inline-block px-1 rounded ${colors.bg} ${colors.text} border ${colors.border}" title="${escapeHtml(seg.field)}">${escapeHtml(seg.value)}</span>`;
+        const fallbackText = options.hideText ? 'text-transparent' : 'text-gray-900';
+        const colors = fieldColorMap[seg.field] || { bg: 'bg-gray-100', text: fallbackText, border: 'border-gray-300' };
+        const textClass = options.hideText ? 'text-transparent' : colors.text;
+        const displayClass = options.compact ? 'inline' : 'inline-block';
+        const paddingClass = options.compact ? '' : 'px-1';
+        const borderClass = options.compact ? '' : `border ${colors.border}`;
+        result += `<span class="${displayClass} ${paddingClass} rounded ${colors.bg} ${textClass} ${borderClass}" title="${escapeHtml(seg.field)}">${escapeHtml(seg.value)}</span>`;
         
         lastIndex = seg.end;
     });
@@ -184,12 +233,162 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function buildFieldOrder(patternFieldOrder, fieldSet) {
+    if (!patternFieldOrder || patternFieldOrder.length === 0) {
+        return Array.from(fieldSet);
+    }
+
+    const ordered = [];
+    const used = new Set();
+    patternFieldOrder.forEach(field => {
+        if (fieldSet.has(field)) {
+            ordered.push(field);
+            used.add(field);
+        }
+    });
+
+    fieldSet.forEach(field => {
+        if (!used.has(field)) {
+            ordered.push(field);
+        }
+    });
+
+    return ordered;
+}
+
+function buildOrderedEntries(fields, orderedFields) {
+    const entries = [];
+    const used = new Set();
+
+    orderedFields.forEach(field => {
+        if (Object.prototype.hasOwnProperty.call(fields, field)) {
+            entries.push([field, fields[field]]);
+            used.add(field);
+        }
+    });
+
+    Object.entries(fields).forEach(([key, value]) => {
+        if (!used.has(key)) {
+            entries.push([key, value]);
+        }
+    });
+
+    return entries;
+}
+
+function buildOrderedFields(fields, fieldOrder) {
+    if (!fieldOrder || fieldOrder.length === 0) {
+        return Object.keys(fields);
+    }
+
+    const ordered = [];
+    const used = new Set();
+
+    fieldOrder.forEach(field => {
+        if (Object.prototype.hasOwnProperty.call(fields, field)) {
+            ordered.push(field);
+            used.add(field);
+        }
+    });
+
+    Object.keys(fields).forEach(field => {
+        if (!used.has(field)) {
+            ordered.push(field);
+        }
+    });
+
+    return ordered;
+}
+
+function resolveFieldType(field, value, fieldTypes) {
+    if (value === null) {
+        return 'null';
+    }
+
+    if (fieldTypes && fieldTypes[field]) {
+        return fieldTypes[field];
+    }
+
+    return typeof value;
+}
+
+function getMatchLine(match, rawLines, fallbackLine) {
+    if (match && typeof match.line === 'string') {
+        return match.line;
+    }
+
+    if (match && Number.isInteger(match.lineIndex)) {
+        return rawLines[match.lineIndex] || '';
+    }
+
+    return fallbackLine;
+}
+
+function renderTestDataHighlights(data, fieldColorMap, fieldOrder = []) {
+    if (!testDataHighlightContent) {
+        return;
+    }
+
+    const colorMap = fieldColorMap || {};
+    const lines = testDataInput.value.split('\n');
+    const matchByLine = new Map();
+    const matches = data && Array.isArray(data.matches) ? data.matches : [];
+    const hasLineIndexes = matches.some(match => Number.isInteger(match.lineIndex));
+
+    if (hasLineIndexes) {
+        matches.forEach(match => {
+            if (Number.isInteger(match.lineIndex)) {
+                matchByLine.set(match.lineIndex, match);
+            }
+        });
+    } else {
+        let matchIndex = 0;
+        lines.forEach((line, index) => {
+            if (line.trim() === '') {
+                return;
+            }
+
+            const match = matches[matchIndex];
+            if (match) {
+                matchByLine.set(index, match);
+                matchIndex += 1;
+            }
+        });
+    }
+
+    const htmlLines = lines.map((line, index) => {
+        const match = matchByLine.get(index);
+        if (match && match.fields) {
+            return highlightMatchedLine(line, match.fields, colorMap, { hideText: true, compact: true, fieldOrder });
+        }
+        if (match && !match.fields) {
+            return highlightMatchedLine(line, match, colorMap, { hideText: true, compact: true, fieldOrder });
+        }
+
+        return escapeHtml(line);
+    });
+
+    testDataHighlightContent.innerHTML = htmlLines.join('\n');
+    syncTestDataHighlightScroll();
+}
+
+function syncTestDataHighlightScroll() {
+    if (!testDataHighlights) {
+        return;
+    }
+
+    testDataHighlights.scrollTop = testDataInput.scrollTop;
+    testDataHighlights.scrollLeft = testDataInput.scrollLeft;
+}
+
 function testPattern() {
     const pattern = patternInput.value.trim();
-    const testData = testDataInput.value.trim();
+    const testData = testDataInput.value;
+    const testDataTrimmed = testData.trim();
     
-    if (!pattern || !testData) {
+    if (!pattern || !testDataTrimmed) {
         outputDiv.innerHTML = '<div class="text-gray-500 text-center py-10 italic">Enter both a pattern and test data to see results...</div>';
+        renderTestDataHighlights(null, {});
         updateStatus('Ready', 'info');
         return;
     }
@@ -222,6 +421,7 @@ function testPattern() {
             <strong class="text-red-800">Request Error:</strong><br>
             <span class="text-red-700">${escapeHtml(error.message)}</span>
         </div>`;
+        renderTestDataHighlights(null, {});
         updateStatus('Error', 'error');
     });
 }
@@ -384,6 +584,7 @@ function updateSelectedItem(items) {
 patternInput.addEventListener('input', handlePatternInput);
 patternInput.addEventListener('keydown', handlePatternKeyDown);
 testDataInput.addEventListener('input', handleInput);
+testDataInput.addEventListener('scroll', syncTestDataHighlightScroll);
 
 // Close autocomplete when clicking outside
 document.addEventListener('click', (e) => {
@@ -395,7 +596,7 @@ document.addEventListener('click', (e) => {
 // Load example on page load
 window.addEventListener('DOMContentLoaded', () => {
     loadPatternNames();
-    patternInput.value = '%{IPORHOST:remote_addr} %{DATA:remote_host} %{DATA:remote_user} [%{HTTPDATE:timestamp}] "%{DATA:http_method} %{DATA:request} %{DATA:http_version}" %{INT:status} %{INT:body_bytes_sent} "%{DATA:http_referer}" "%{DATA:user_agent}"';
+    patternInput.value = '%{IPORHOST:remote_addr} %{DATA:remote_host} %{DATA:remote_user} \\[%{DATA:timestamp}\\] "%{WORD:http_method} %{DATA:request} %{DATA:http_version}" %{INT:status} %{INT:body_bytes_sent} "%{DATA:http_referer}" "%{DATA:user_agent}"';
     testDataInput.value = `173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /zend/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"
 173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /ws/ec/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"
 173.249.11.249 - - [26/Jan/2026:10:08:50 +0800] "GET /V2/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"`;

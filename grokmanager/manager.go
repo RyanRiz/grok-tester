@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -175,12 +176,20 @@ type TestRequest struct {
 	TestData string `json:"testData" binding:"required"`
 }
 
+type MatchResult struct {
+	Fields    map[string]interface{} `json:"fields"`
+	Line      string                 `json:"line"`
+	LineIndex int                    `json:"lineIndex"`
+}
+
 type TestResponse struct {
-	Success bool                     `json:"success"`
-	Matches []map[string]interface{} `json:"matches,omitempty"`
-	Total   int                      `json:"total,omitempty"`
-	Matched int                      `json:"matched,omitempty"`
-	Error   string                   `json:"error,omitempty"`
+	Success    bool              `json:"success"`
+	Matches    []MatchResult     `json:"matches,omitempty"`
+	Total      int               `json:"total,omitempty"`
+	Matched    int               `json:"matched,omitempty"`
+	FieldOrder []string          `json:"fieldOrder,omitempty"`
+	FieldTypes map[string]string `json:"fieldTypes,omitempty"`
+	Error      string            `json:"error,omitempty"`
 }
 
 func TestPattern(req TestRequest) TestResponse {
@@ -225,21 +234,26 @@ func TestPattern(req TestRequest) TestResponse {
 		}
 	}
 
+	fieldOrder, fieldTypes := parsePatternFields(req.Pattern)
+
 	// Split test data by newlines and parse each line
 	lines := strings.Split(req.TestData, "\n")
-	var allMatches []map[string]interface{}
+	var allMatches []MatchResult
 	matchedCount := 0
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	for index, line := range lines {
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
 		// Parse the line
 		matches, err := g.ParseTypedString(line)
 		if err == nil && len(matches) > 0 {
-			allMatches = append(allMatches, matches)
+			allMatches = append(allMatches, MatchResult{
+				Fields:    matches,
+				Line:      line,
+				LineIndex: index,
+			})
 			matchedCount++
 		}
 	}
@@ -247,18 +261,75 @@ func TestPattern(req TestRequest) TestResponse {
 	// Check if any patterns matched
 	if matchedCount == 0 {
 		return TestResponse{
-			Success: true,
-			Total:   len(lines),
-			Matched: 0,
-			Error:   "Pattern did not match any test data lines",
+			Success:    true,
+			Total:      len(lines),
+			Matched:    0,
+			FieldOrder: fieldOrder,
+			FieldTypes: fieldTypes,
+			Error:      "Pattern did not match any test data lines",
 		}
 	}
 
 	return TestResponse{
-		Success: true,
-		Matches: allMatches,
-		Total:   len(lines),
-		Matched: matchedCount,
+		Success:    true,
+		Matches:    allMatches,
+		Total:      len(lines),
+		Matched:    matchedCount,
+		FieldOrder: fieldOrder,
+		FieldTypes: fieldTypes,
+	}
+}
+
+var grokFieldPattern = regexp.MustCompile(`%{([^}]+)}`)
+
+func parsePatternFields(pattern string) ([]string, map[string]string) {
+	var order []string
+	types := make(map[string]string)
+	seen := make(map[string]bool)
+
+	for _, match := range grokFieldPattern.FindAllStringSubmatch(pattern, -1) {
+		if len(match) < 2 {
+			continue
+		}
+
+		parts := strings.Split(match[1], ":")
+		if len(parts) < 2 {
+			continue
+		}
+
+		patternName := strings.TrimSpace(parts[0])
+		fieldName := strings.TrimSpace(parts[1])
+		if fieldName == "" {
+			continue
+		}
+
+		if !seen[fieldName] {
+			order = append(order, fieldName)
+			seen[fieldName] = true
+		}
+
+		typeHint := ""
+		if len(parts) > 2 {
+			typeHint = strings.TrimSpace(parts[2])
+		}
+		types[fieldName] = normalizeFieldType(patternName, typeHint)
+	}
+
+	return order, types
+}
+
+func normalizeFieldType(patternName, typeHint string) string {
+	if typeHint != "" {
+		return strings.ToLower(typeHint)
+	}
+
+	switch strings.ToUpper(patternName) {
+	case "INT", "POSINT", "NONNEGINT", "BASE16NUM":
+		return "int"
+	case "NUMBER", "BASE10NUM", "BASE16FLOAT":
+		return "float"
+	default:
+		return "string"
 	}
 }
 

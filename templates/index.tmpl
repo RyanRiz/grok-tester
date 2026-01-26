@@ -43,12 +43,17 @@
                         <h2 class="text-lg font-semibold text-gray-800">Test Data</h2>
                         <span class="text-sm text-gray-600">Sample log or text to parse</span>
                     </div>
-                    <textarea 
-                        id="testData" 
-                        placeholder="Example: 192.168.1.1 GET /index.html"
-                        spellcheck="false"
-                        class="flex-1 min-h-[350px] p-4 border-2 border-gray-300 rounded-lg font-mono text-sm leading-6 resize-y focus:outline-none focus:border-indigo-500 transition-colors"
-                    ></textarea>
+                    <div class="relative flex flex-col flex-1 min-h-[350px] border-2 border-gray-300 rounded-lg bg-white transition-colors focus-within:border-indigo-500">
+                        <div id="testDataHighlights" class="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
+                            <div id="testDataHighlightContent" class="p-4 font-mono text-sm leading-6 whitespace-pre-wrap break-words text-transparent"></div>
+                        </div>
+                        <textarea 
+                            id="testData" 
+                            placeholder="Example: 192.168.1.1 GET /index.html"
+                            spellcheck="false"
+                            class="relative z-10 flex-1 w-full min-h-[350px] p-4 font-mono text-sm leading-6 resize-y bg-transparent focus:outline-none"
+                        ></textarea>
+                    </div>
                     <div class="mt-2 text-sm text-gray-600">
                         Paste your log line or text to test against the pattern
                     </div>
