@@ -15,6 +15,8 @@ const outputCopyJsonButton = document.getElementById('outputCopyJson');
 const patternCopyButton = document.getElementById('patternCopy');
 const patternAddCustomButton = document.getElementById('patternAddCustom');
 const patternEditCustomButton = document.getElementById('patternEditCustom');
+const patternSaveCustomButton = document.getElementById('patternSaveCustom');
+const patternCancelEditButton = document.getElementById('patternCancelEdit');
 const customPatternModal = document.getElementById('customPatternModal');
 const customPatternBackdrop = document.getElementById('customPatternBackdrop');
 const customPatternCloseButton = document.getElementById('customPatternClose');
@@ -33,6 +35,7 @@ const sessionStateTTL = 7 * 24 * 60 * 60 * 1000;
 const themeStorageKey = 'grokTester.theme';
 const themeToggleButton = document.getElementById('themeToggle');
 let customPatternMode = 'add';
+let customPatternEditingName = '';
 
 let availablePatterns = [];
 let autocompleteList = null;
@@ -878,6 +881,19 @@ function setCustomPatternMode(mode) {
     }
 }
 
+function setCustomPatternEditing(name) {
+    customPatternEditingName = name || '';
+    if (patternSaveCustomButton) {
+        patternSaveCustomButton.classList.toggle('hidden', customPatternEditingName === '');
+    }
+    if (patternCancelEditButton) {
+        patternCancelEditButton.classList.toggle('hidden', customPatternEditingName === '');
+    }
+    if (patternAddCustomButton) {
+        patternAddCustomButton.classList.toggle('hidden', customPatternEditingName !== '');
+    }
+}
+
 function openCustomPatternModal(mode = 'add') {
     if (!customPatternModal) {
         return;
@@ -936,18 +952,23 @@ function renderCustomPatternList(patterns) {
 
     customPatternEmpty.classList.add('hidden');
     patterns.forEach(pattern => {
-        const item = document.createElement('div');
-        item.className = 'border border-gray-200 rounded-lg p-3 bg-gray-50';
+        const item = document.createElement('tr');
+        item.className = 'border-b border-gray-200 hover:bg-gray-50';
         item.dataset.patternName = pattern.name;
+        item.dataset.patternDefinition = pattern.pattern;
         item.innerHTML = `
-            <div class="flex items-center justify-between gap-2 mb-2">
+            <td class="px-3 py-2 w-32 align-top">
                 <span class="font-mono text-xs text-gray-700">${escapeHtml(pattern.name)}</span>
-                <div class="flex items-center gap-2">
-                    <button data-action="save" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Save</button>
+            </td>
+            <td class="px-3 py-2 text-xs text-gray-600">
+                <span class="font-mono whitespace-pre-wrap break-words">${escapeHtml(pattern.pattern)}</span>
+            </td>
+            <td class="px-3 py-2 w-28 text-right">
+                <div class="flex items-center justify-end gap-2">
+                    <button data-action="edit" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Edit</button>
                     <button data-action="delete" class="px-2.5 py-1 text-xs font-semibold text-red-600 bg-white border border-red-200 rounded hover:bg-red-50">Delete</button>
                 </div>
-            </div>
-            <textarea class="w-full px-3 py-2 border border-gray-200 rounded font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200" rows="2">${escapeHtml(pattern.pattern)}</textarea>
+            </td>
         `;
         customPatternList.appendChild(item);
     });
@@ -1078,33 +1099,15 @@ if (customPatternList) {
         }
 
         const name = item.dataset.patternName;
-        const textarea = item.querySelector('textarea');
-        const pattern = textarea ? textarea.value.trim() : '';
+        const pattern = item.dataset.patternDefinition || '';
 
-        if (button.dataset.action === 'save') {
-            if (!pattern) {
-                showCustomPatternError('Pattern definition cannot be empty.');
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/custom-patterns/${encodeURIComponent(name)}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pattern })
-                });
-
-                if (!response.ok) {
-                    const payload = await response.json().catch(() => null);
-                    throw new Error(payload?.error || 'Failed to update custom pattern.');
-                }
-
-                showCustomPatternError('');
-                await loadCustomPatterns();
-                loadPatternNames();
-            } catch (err) {
-                showCustomPatternError(err.message || 'Failed to update custom pattern.');
-            }
+        if (button.dataset.action === 'edit') {
+            patternInput.value = pattern;
+            handleInput();
+            setCustomPatternEditing(name);
+            showCustomPatternError('');
+            closeCustomPatternModal();
+            return;
         }
 
         if (button.dataset.action === 'delete') {
@@ -1125,6 +1128,47 @@ if (customPatternList) {
                 showCustomPatternError(err.message || 'Failed to delete custom pattern.');
             }
         }
+    });
+}
+if (patternSaveCustomButton) {
+    patternSaveCustomButton.addEventListener('click', async () => {
+        if (!customPatternEditingName) {
+            return;
+        }
+
+        const editingName = customPatternEditingName;
+        const pattern = patternInput.value.trim();
+        if (!pattern) {
+            showCustomPatternError('Pattern definition cannot be empty.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/custom-patterns/${encodeURIComponent(customPatternEditingName)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pattern })
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                throw new Error(payload?.error || 'Failed to update custom pattern.');
+            }
+
+            showCustomPatternError('');
+            patternInput.value = `%{${editingName}}`;
+            handleInput();
+            setCustomPatternEditing('');
+            await loadCustomPatterns();
+            loadPatternNames();
+        } catch (err) {
+            showCustomPatternError(err.message || 'Failed to update custom pattern.');
+        }
+    });
+}
+if (patternCancelEditButton) {
+    patternCancelEditButton.addEventListener('click', () => {
+        setCustomPatternEditing('');
     });
 }
 if (themeToggleButton) {
