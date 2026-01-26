@@ -12,9 +12,25 @@ const outputViewJsonButton = document.getElementById('outputViewJson');
 const testDataCopyButton = document.getElementById('testDataCopy');
 const testDataClearButton = document.getElementById('testDataClear');
 const outputCopyJsonButton = document.getElementById('outputCopyJson');
+const patternCopyButton = document.getElementById('patternCopy');
+const patternAddCustomButton = document.getElementById('patternAddCustom');
+const patternEditCustomButton = document.getElementById('patternEditCustom');
+const customPatternModal = document.getElementById('customPatternModal');
+const customPatternBackdrop = document.getElementById('customPatternBackdrop');
+const customPatternCloseButton = document.getElementById('customPatternClose');
+const customPatternNameInput = document.getElementById('customPatternName');
+const customPatternValueInput = document.getElementById('customPatternValue');
+const customPatternAddButton = document.getElementById('customPatternAdd');
+const customPatternList = document.getElementById('customPatternList');
+const customPatternEmpty = document.getElementById('customPatternEmpty');
+const customPatternError = document.getElementById('customPatternError');
 let testDataMeasure = null;
 let outputViewMode = 'table';
 let lastResponseData = null;
+const sessionStorageKey = 'grokTester.sessionState';
+const sessionStateTTL = 7 * 24 * 60 * 60 * 1000;
+const themeStorageKey = 'grokTester.theme';
+const themeToggleButton = document.getElementById('themeToggle');
 
 let availablePatterns = [];
 let autocompleteList = null;
@@ -476,6 +492,7 @@ function testPattern() {
         outputDiv.innerHTML = '<div class="text-gray-500 text-center py-10 italic">Enter both a pattern and test data to see results...</div>';
         renderTestDataHighlights(null, {});
         updateStatus('Ready', 'info');
+        saveSessionState();
         return;
     }
     
@@ -495,6 +512,7 @@ function testPattern() {
     .then(data => {
         lastResponseData = data;
         outputDiv.innerHTML = formatOutput(data);
+        saveSessionState();
         if (data.success && data.matches && data.matches.length > 0) {
             updateStatus(`${data.matched}/${data.total} matched`, 'success');
         } else if (!data.success) {
@@ -511,12 +529,14 @@ function testPattern() {
         </div>`;
         renderTestDataHighlights(null, {});
         updateStatus('Error', 'error');
+        saveSessionState();
     });
 }
 
 function handleInput() {
     clearTimeout(debounceTimer);
     updateTestDataLineNumbers(testDataInput.value.split('\n'));
+    saveSessionState();
     debounceTimer = setTimeout(testPattern, 300);
 }
 
@@ -675,6 +695,7 @@ function setOutputViewMode(mode) {
     if (lastResponseData) {
         outputDiv.innerHTML = formatOutput(lastResponseData);
     }
+    saveSessionState();
 }
 
 function updateOutputViewButtons() {
@@ -689,6 +710,158 @@ function updateOutputViewButtons() {
         outputViewTableButton.className = 'px-3 py-1 text-xs font-semibold text-gray-600 hover:text-gray-800';
         outputViewJsonButton.className = 'px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-100';
     }
+
+    if (outputCopyJsonButton) {
+        outputCopyJsonButton.classList.toggle('hidden', outputViewMode !== 'json');
+    }
+}
+
+function saveSessionState() {
+    try {
+        const payload = {
+            pattern: patternInput.value,
+            testData: testDataInput.value,
+            outputViewMode,
+            lastResponseData,
+            lastAccess: Date.now()
+        };
+        localStorage.setItem(sessionStorageKey, JSON.stringify(payload));
+    } catch (err) {
+        console.warn('Failed to save session state:', err);
+    }
+}
+
+function loadSessionState() {
+    try {
+        const raw = localStorage.getItem(sessionStorageKey);
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        const lastAccess = typeof parsed.lastAccess === 'number' ? parsed.lastAccess : Date.now();
+        if (Date.now() - lastAccess > sessionStateTTL) {
+            localStorage.removeItem(sessionStorageKey);
+            return null;
+        }
+        parsed.lastAccess = Date.now();
+        localStorage.setItem(sessionStorageKey, JSON.stringify(parsed));
+        return parsed;
+    } catch (err) {
+        console.warn('Failed to load session state:', err);
+        return null;
+    }
+}
+
+function applyTheme(mode) {
+    const useDark = mode === 'dark';
+    document.body.classList.toggle('theme-dark', useDark);
+    if (themeToggleButton) {
+        themeToggleButton.textContent = useDark ? 'Light mode' : 'Dark mode';
+    }
+}
+
+function loadThemePreference() {
+    const stored = localStorage.getItem(themeStorageKey);
+    if (stored === 'dark' || stored === 'light') {
+        return stored;
+    }
+
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+    }
+
+    return 'light';
+}
+
+function setThemePreference(mode) {
+    localStorage.setItem(themeStorageKey, mode);
+    applyTheme(mode);
+}
+
+function showCustomPatternError(message) {
+    if (!customPatternError) {
+        return;
+    }
+
+    if (message) {
+        customPatternError.textContent = message;
+        customPatternError.classList.remove('hidden');
+    } else {
+        customPatternError.textContent = '';
+        customPatternError.classList.add('hidden');
+    }
+}
+
+function openCustomPatternModal(focusAdd = false) {
+    if (!customPatternModal) {
+        return;
+    }
+
+    customPatternModal.classList.remove('hidden');
+    showCustomPatternError('');
+    loadCustomPatterns();
+
+    if (focusAdd && customPatternNameInput) {
+        customPatternNameInput.focus();
+    }
+}
+
+function closeCustomPatternModal() {
+    if (!customPatternModal) {
+        return;
+    }
+
+    customPatternModal.classList.add('hidden');
+    showCustomPatternError('');
+}
+
+async function loadCustomPatterns() {
+    if (!customPatternList) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/custom-patterns');
+        if (!response.ok) {
+            throw new Error('Failed to load custom patterns');
+        }
+
+        const patterns = await response.json();
+        renderCustomPatternList(patterns);
+    } catch (err) {
+        console.error(err);
+        showCustomPatternError('Failed to load custom patterns.');
+    }
+}
+
+function renderCustomPatternList(patterns) {
+    if (!customPatternList || !customPatternEmpty) {
+        return;
+    }
+
+    customPatternList.innerHTML = '';
+    if (!patterns || patterns.length === 0) {
+        customPatternEmpty.classList.remove('hidden');
+        return;
+    }
+
+    customPatternEmpty.classList.add('hidden');
+    patterns.forEach(pattern => {
+        const item = document.createElement('div');
+        item.className = 'border border-gray-200 rounded-lg p-3 bg-gray-50';
+        item.dataset.patternName = pattern.name;
+        item.innerHTML = `
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="font-mono text-xs text-gray-700">${escapeHtml(pattern.name)}</span>
+                <div class="flex items-center gap-2">
+                    <button data-action="save" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Save</button>
+                    <button data-action="delete" class="px-2.5 py-1 text-xs font-semibold text-red-600 bg-white border border-red-200 rounded hover:bg-red-50">Delete</button>
+                </div>
+            </div>
+            <textarea class="w-full px-3 py-2 border border-gray-200 rounded font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200" rows="2">${escapeHtml(pattern.pattern)}</textarea>
+        `;
+        customPatternList.appendChild(item);
+    });
 }
 
 // Add event listeners
@@ -729,6 +902,140 @@ if (outputCopyJsonButton) {
         }
     });
 }
+if (patternCopyButton) {
+    patternCopyButton.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(patternInput.value);
+        } catch (err) {
+            console.error('Failed to copy pattern:', err);
+        }
+    });
+}
+if (patternAddCustomButton) {
+    patternAddCustomButton.addEventListener('click', () => {
+        if (customPatternNameInput) {
+            customPatternNameInput.value = '';
+        }
+        if (customPatternValueInput) {
+            customPatternValueInput.value = '';
+        }
+        openCustomPatternModal(true);
+    });
+}
+if (patternEditCustomButton) {
+    patternEditCustomButton.addEventListener('click', () => {
+        openCustomPatternModal(false);
+    });
+}
+if (customPatternCloseButton) {
+    customPatternCloseButton.addEventListener('click', closeCustomPatternModal);
+}
+if (customPatternBackdrop) {
+    customPatternBackdrop.addEventListener('click', closeCustomPatternModal);
+}
+if (customPatternAddButton) {
+    customPatternAddButton.addEventListener('click', async () => {
+        if (!customPatternNameInput || !customPatternValueInput) {
+            return;
+        }
+
+        const name = customPatternNameInput.value.trim();
+        const pattern = customPatternValueInput.value.trim();
+        if (!name || !pattern) {
+            showCustomPatternError('Name and pattern are required.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/custom-patterns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, pattern })
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                throw new Error(payload?.error || 'Failed to add custom pattern.');
+            }
+
+            customPatternNameInput.value = '';
+            customPatternValueInput.value = '';
+            showCustomPatternError('');
+            await loadCustomPatterns();
+            loadPatternNames();
+        } catch (err) {
+            showCustomPatternError(err.message || 'Failed to add custom pattern.');
+        }
+    });
+}
+if (customPatternList) {
+    customPatternList.addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) {
+            return;
+        }
+
+        const item = button.closest('[data-pattern-name]');
+        if (!item) {
+            return;
+        }
+
+        const name = item.dataset.patternName;
+        const textarea = item.querySelector('textarea');
+        const pattern = textarea ? textarea.value.trim() : '';
+
+        if (button.dataset.action === 'save') {
+            if (!pattern) {
+                showCustomPatternError('Pattern definition cannot be empty.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/custom-patterns/${encodeURIComponent(name)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pattern })
+                });
+
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => null);
+                    throw new Error(payload?.error || 'Failed to update custom pattern.');
+                }
+
+                showCustomPatternError('');
+                await loadCustomPatterns();
+                loadPatternNames();
+            } catch (err) {
+                showCustomPatternError(err.message || 'Failed to update custom pattern.');
+            }
+        }
+
+        if (button.dataset.action === 'delete') {
+            try {
+                const response = await fetch(`/api/custom-patterns/${encodeURIComponent(name)}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => null);
+                    throw new Error(payload?.error || 'Failed to delete custom pattern.');
+                }
+
+                showCustomPatternError('');
+                await loadCustomPatterns();
+                loadPatternNames();
+            } catch (err) {
+                showCustomPatternError(err.message || 'Failed to delete custom pattern.');
+            }
+        }
+    });
+}
+if (themeToggleButton) {
+    themeToggleButton.addEventListener('click', () => {
+        const isDark = document.body.classList.contains('theme-dark');
+        setThemePreference(isDark ? 'light' : 'dark');
+    });
+}
 window.addEventListener('resize', () => {
     updateTestDataLineNumbers(testDataInput.value.split('\n'));
 });
@@ -743,7 +1050,27 @@ document.addEventListener('click', (e) => {
 // Load example on page load
 window.addEventListener('DOMContentLoaded', () => {
     loadPatternNames();
+    applyTheme(loadThemePreference());
     updateOutputViewButtons();
+    const savedState = loadSessionState();
+    if (savedState) {
+        patternInput.value = savedState.pattern || '';
+        testDataInput.value = savedState.testData || '';
+        if (savedState.outputViewMode) {
+            outputViewMode = savedState.outputViewMode;
+        }
+        lastResponseData = savedState.lastResponseData || null;
+        updateOutputViewButtons();
+        updateTestDataLineNumbers(testDataInput.value.split('\n'));
+        if (lastResponseData) {
+            outputDiv.innerHTML = formatOutput(lastResponseData);
+        }
+        if (patternInput.value.trim() && testDataInput.value.trim()) {
+            testPattern();
+        }
+        return;
+    }
+
     patternInput.value = '%{IPORHOST:remote_addr} %{DATA:remote_host} %{DATA:remote_user} \\[%{DATA:timestamp}\\] "%{WORD:http_method} %{DATA:request} %{DATA:http_version}" %{INT:status} %{INT:body_bytes_sent} "%{DATA:http_referer}" "%{DATA:user_agent}"';
     testDataInput.value = `173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /zend/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"
 173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /ws/ec/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"
