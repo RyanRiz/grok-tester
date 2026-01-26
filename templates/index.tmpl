@@ -30,6 +30,15 @@
             color: #e2e8f0;
             border-color: #475569;
         }
+        body.theme-dark textarea:focus,
+        body.theme-dark input:focus,
+        body.theme-dark select:focus {
+            border-color: #64748b;
+            box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.35);
+        }
+        body.theme-dark .test-data-shell:focus-within {
+            border-color: #64748b;
+        }
         body.theme-dark #testData {
             background-color: transparent;
         }
@@ -97,7 +106,7 @@
                             <span class="text-sm text-gray-600">Sample log or text to parse</span>
                         </div>
                     </div>
-                    <div class="relative flex flex-col flex-1 min-h-0 border-2 border-gray-300 rounded-lg bg-white transition-colors focus-within:border-gray-500 overflow-hidden">
+                    <div class="test-data-shell relative flex flex-col flex-1 min-h-0 border-2 border-gray-300 rounded-lg bg-white transition-colors focus-within:border-gray-500 overflow-hidden">
                         <div id="testDataHighlights" class="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
                             <div id="testDataLineNumbers" class="absolute inset-y-0 left-0 w-12 border-r border-gray-200 bg-white">
                                 <div id="testDataLineNumberContent" class="p-4 pr-3 font-mono text-sm leading-6 text-right text-gray-400 whitespace-pre"></div>
