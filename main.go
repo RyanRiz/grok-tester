@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -10,6 +12,9 @@ import (
 )
 
 func main() {
+	port := flag.Int("port", 8080, "Port to run the server on")
+	flag.Parse()
+
 	router := gin.Default()
 
 	router.LoadHTMLGlob("templates/*")
@@ -26,8 +31,9 @@ func main() {
 	router.PUT("/api/custom-patterns/:name", handlers.UpdateCustomPatternHandler)
 	router.DELETE("/api/custom-patterns/:name", handlers.DeleteCustomPatternHandler)
 
-	log.Println("Starting Grok Pattern Tester on http://localhost:8080")
-	if err := router.Run(":8080"); err != nil {
+	address := fmt.Sprintf(":%d", *port)
+	log.Printf("Starting Grok Pattern Tester on http://localhost:%d", *port)
+	if err := router.Run(address); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
