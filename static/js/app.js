@@ -1212,9 +1212,7 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    patternInput.value = '%{IPORHOST:remote_addr} %{DATA:remote_host} %{DATA:remote_user} \\[%{DATA:timestamp}\\] "%{WORD:http_method} %{DATA:request} %{DATA:http_version}" %{INT:status} %{INT:body_bytes_sent} "%{DATA:http_referer}" "%{DATA:user_agent}"';
-    testDataInput.value = `173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /zend/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"
-173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /ws/ec/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"
-173.249.11.249 - - [26/Jan/2026:10:08:50 +0800] "GET /V2/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"`;
+    patternInput.value = '';
+    testDataInput.value = ``;
     testPattern();
 });
