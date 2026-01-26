@@ -259,7 +259,7 @@ func TestPattern(sessionID string, req TestRequest) TestResponse {
 		}
 	}
 
-	fieldOrder, fieldTypes := parsePatternFields(req.Pattern)
+	fieldOrder, fieldTypes := parsePatternFields(req.Pattern, getCombinedPatterns(sessionID))
 
 	// Split test data by newlines and parse each line
 	lines := strings.Split(req.TestData, "\n")
@@ -307,38 +307,64 @@ func TestPattern(sessionID string, req TestRequest) TestResponse {
 
 var grokFieldPattern = regexp.MustCompile(`%{([^}]+)}`)
 
-func parsePatternFields(pattern string) ([]string, map[string]string) {
+func parsePatternFields(pattern string, definitions map[string]string) ([]string, map[string]string) {
 	var order []string
 	types := make(map[string]string)
 	seen := make(map[string]bool)
+	expanded := make(map[string]bool)
+	inStack := make(map[string]bool)
 
-	for _, match := range grokFieldPattern.FindAllStringSubmatch(pattern, -1) {
-		if len(match) < 2 {
-			continue
-		}
+	var parse func(string)
+	parse = func(input string) {
+		for _, match := range grokFieldPattern.FindAllStringSubmatch(input, -1) {
+			if len(match) < 2 {
+				continue
+			}
 
-		parts := strings.Split(match[1], ":")
-		if len(parts) < 2 {
-			continue
-		}
+			parts := strings.Split(match[1], ":")
+			if len(parts) == 0 {
+				continue
+			}
 
-		patternName := strings.TrimSpace(parts[0])
-		fieldName := strings.TrimSpace(parts[1])
-		if fieldName == "" {
-			continue
-		}
+			patternName := strings.TrimSpace(parts[0])
+			fieldName := ""
+			typeHint := ""
+			if len(parts) > 1 {
+				fieldName = strings.TrimSpace(parts[1])
+			}
+			if len(parts) > 2 {
+				typeHint = strings.TrimSpace(parts[2])
+			}
 
-		if !seen[fieldName] {
-			order = append(order, fieldName)
-			seen[fieldName] = true
-		}
+			if fieldName != "" {
+				if !seen[fieldName] {
+					order = append(order, fieldName)
+					seen[fieldName] = true
+				}
+				types[fieldName] = normalizeFieldType(patternName, typeHint)
+			}
 
-		typeHint := ""
-		if len(parts) > 2 {
-			typeHint = strings.TrimSpace(parts[2])
+			if patternName == "" {
+				continue
+			}
+
+			if expanded[patternName] || inStack[patternName] {
+				continue
+			}
+
+			definition, ok := definitions[patternName]
+			if !ok || strings.TrimSpace(definition) == "" {
+				continue
+			}
+
+			inStack[patternName] = true
+			parse(definition)
+			inStack[patternName] = false
+			expanded[patternName] = true
 		}
-		types[fieldName] = normalizeFieldType(patternName, typeHint)
 	}
+
+	parse(pattern)
 
 	return order, types
 }

@@ -19,11 +19,12 @@ const customPatternModal = document.getElementById('customPatternModal');
 const customPatternBackdrop = document.getElementById('customPatternBackdrop');
 const customPatternCloseButton = document.getElementById('customPatternClose');
 const customPatternNameInput = document.getElementById('customPatternName');
-const customPatternValueInput = document.getElementById('customPatternValue');
 const customPatternAddButton = document.getElementById('customPatternAdd');
 const customPatternList = document.getElementById('customPatternList');
 const customPatternEmpty = document.getElementById('customPatternEmpty');
 const customPatternError = document.getElementById('customPatternError');
+const customPatternAddSection = document.getElementById('customPatternAddSection');
+const customPatternListSection = document.getElementById('customPatternListSection');
 let testDataMeasure = null;
 let outputViewMode = 'table';
 let lastResponseData = null;
@@ -31,6 +32,7 @@ const sessionStorageKey = 'grokTester.sessionState';
 const sessionStateTTL = 7 * 24 * 60 * 60 * 1000;
 const themeStorageKey = 'grokTester.theme';
 const themeToggleButton = document.getElementById('themeToggle');
+let customPatternMode = 'add';
 
 let availablePatterns = [];
 let autocompleteList = null;
@@ -58,6 +60,45 @@ function updateStatus(message, type = 'info') {
     }
 }
 
+function getFieldColors() {
+    const isDark = document.body.classList.contains('theme-dark');
+    if (isDark) {
+        return [
+            { bg: 'bg-blue-700', text: 'text-blue-100', border: 'border-blue-500' },
+            { bg: 'bg-green-700', text: 'text-green-100', border: 'border-green-500' },
+            { bg: 'bg-purple-700', text: 'text-purple-100', border: 'border-purple-500' },
+            { bg: 'bg-yellow-600', text: 'text-yellow-100', border: 'border-yellow-400' },
+            { bg: 'bg-red-700', text: 'text-red-100', border: 'border-red-500' },
+            { bg: 'bg-orange-700', text: 'text-orange-100', border: 'border-orange-500' },
+            { bg: 'bg-teal-700', text: 'text-teal-100', border: 'border-teal-500' },
+            { bg: 'bg-cyan-700', text: 'text-cyan-100', border: 'border-cyan-500' },
+            { bg: 'bg-lime-700', text: 'text-lime-100', border: 'border-lime-500' },
+            { bg: 'bg-emerald-700', text: 'text-emerald-100', border: 'border-emerald-500' },
+            { bg: 'bg-fuchsia-700', text: 'text-fuchsia-100', border: 'border-fuchsia-500' },
+            { bg: 'bg-violet-700', text: 'text-violet-100', border: 'border-violet-500' },
+            { bg: 'bg-rose-700', text: 'text-rose-100', border: 'border-rose-500' },
+            { bg: 'bg-sky-700', text: 'text-sky-100', border: 'border-sky-500' },
+        ];
+    }
+
+    return [
+        { bg: 'bg-blue-100', text: 'text-blue-900', border: 'border-blue-300' },
+        { bg: 'bg-green-100', text: 'text-green-900', border: 'border-green-300' },
+        { bg: 'bg-purple-100', text: 'text-purple-900', border: 'border-purple-300' },
+        { bg: 'bg-yellow-100', text: 'text-yellow-900', border: 'border-yellow-300' },
+        { bg: 'bg-red-100', text: 'text-red-900', border: 'border-red-300' },
+        { bg: 'bg-orange-100', text: 'text-orange-900', border: 'border-orange-300' },
+        { bg: 'bg-teal-100', text: 'text-teal-900', border: 'border-teal-300' },
+        { bg: 'bg-cyan-100', text: 'text-cyan-900', border: 'border-cyan-300' },
+        { bg: 'bg-lime-100', text: 'text-lime-900', border: 'border-lime-300' },
+        { bg: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300' },
+        { bg: 'bg-fuchsia-100', text: 'text-fuchsia-900', border: 'border-fuchsia-300' },
+        { bg: 'bg-violet-100', text: 'text-violet-900', border: 'border-violet-300' },
+        { bg: 'bg-rose-100', text: 'text-rose-900', border: 'border-rose-300' },
+        { bg: 'bg-sky-100', text: 'text-sky-900', border: 'border-sky-300' },
+    ];
+}
+
 function formatOutput(data) {
     if (!data.success) {
         renderTestDataHighlights(data, {});
@@ -79,25 +120,9 @@ function formatOutput(data) {
     let html = '';
     
     // Color palette for field highlighting
-    const fieldColors = [
-        { bg: 'bg-blue-100', text: 'text-blue-900', border: 'border-blue-300' },
-        { bg: 'bg-green-100', text: 'text-green-900', border: 'border-green-300' },
-        { bg: 'bg-purple-100', text: 'text-purple-900', border: 'border-purple-300' },
-        { bg: 'bg-yellow-100', text: 'text-yellow-900', border: 'border-yellow-300' },
-        { bg: 'bg-red-100', text: 'text-red-900', border: 'border-red-300' },
-        { bg: 'bg-orange-100', text: 'text-orange-900', border: 'border-orange-300' },
-        { bg: 'bg-teal-100', text: 'text-teal-900', border: 'border-teal-300' },
-        { bg: 'bg-cyan-100', text: 'text-cyan-900', border: 'border-cyan-300' },
-        { bg: 'bg-lime-100', text: 'text-lime-900', border: 'border-lime-300' },
-        { bg: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300' },
-        { bg: 'bg-fuchsia-100', text: 'text-fuchsia-900', border: 'border-fuchsia-300' },
-        { bg: 'bg-violet-100', text: 'text-violet-900', border: 'border-violet-300' },
-        { bg: 'bg-rose-100', text: 'text-rose-900', border: 'border-rose-300' },
-        { bg: 'bg-sky-100', text: 'text-sky-900', border: 'border-sky-300' },
-    ];
+    const fieldColors = getFieldColors();
     
     const matches = data.matches || [];
-    const fieldTypes = data.fieldTypes || {};
     const patternFieldOrder = Array.isArray(data.fieldOrder) ? data.fieldOrder : [];
     
     // Get all unique field names across all matches
@@ -107,7 +132,14 @@ function formatOutput(data) {
         Object.keys(fields).forEach(key => allFields.add(key));
     });
     
-    const orderedFields = buildFieldOrder(patternFieldOrder, allFields);
+    let orderedFields = buildFieldOrder(patternFieldOrder, allFields);
+    if (patternFieldOrder.length === 0 && matches.length > 0) {
+        const sample = matches[0];
+        const sampleFields = sample.fields || sample;
+        const sampleLine = typeof sample.line === 'string' ? sample.line : '';
+        const lineOrder = buildFieldOrderFromLine(sampleFields, sampleLine);
+        orderedFields = buildFieldOrder(lineOrder, allFields);
+    }
 
     // Assign colors to fields
     const fieldColorMap = {};
@@ -129,12 +161,11 @@ function formatOutput(data) {
         
         // Field table
         html += '<table class="w-full">';
-        html += '<thead><tr class="bg-gray-100"><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Field</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Value</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Type</th></tr></thead>';
+        html += '<thead><tr class="bg-gray-100"><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Field</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Value</th></tr></thead>';
         html += '<tbody>';
         
         const orderedEntries = buildOrderedEntries(fields, orderedFields);
         for (const [key, value] of orderedEntries) {
-            const type = resolveFieldType(key, value, fieldTypes);
             const isNull = value === null;
             const displayValue = isNull ? '<em class="text-gray-400">null</em>' : escapeHtml(String(value));
             const colors = fieldColorMap[key] || { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300' };
@@ -149,7 +180,6 @@ function formatOutput(data) {
                     </span>
                 </td>
                 <td class="px-3 py-2 text-gray-800 break-all">${valueTag}</td>
-                <td class="px-3 py-2 text-gray-500 italic text-xs">${escapeHtml(type)}</td>
             </tr>`;
         }
         
@@ -165,7 +195,9 @@ function highlightMatchedLine(line, match, fieldColorMap, options = {}) {
     // Create an array of segments to highlight
     const segments = [];
     const fieldOrder = Array.isArray(options.fieldOrder) ? options.fieldOrder : [];
-    const orderedFields = buildOrderedFields(match, fieldOrder);
+    const orderedFields = fieldOrder.length > 0
+        ? buildOrderedFields(match, fieldOrder)
+        : buildFieldOrderFromLine(match, line);
     
     // For each field in the match, try to find it in the original line
     let cursor = 0;
@@ -174,31 +206,24 @@ function highlightMatchedLine(line, match, fieldColorMap, options = {}) {
         if (value === null || value === '') continue;
         
         const valueStr = String(value);
-        let startIndex = line.indexOf(valueStr, cursor);
-        
-        if (startIndex === -1) {
-            startIndex = line.indexOf(valueStr);
+        let startIndex = findAvailableIndex(line, valueStr, segments, cursor);
+        if (startIndex === -1 && cursor > 0) {
+            startIndex = findAvailableIndex(line, valueStr, segments, 0);
         }
 
-        if (startIndex !== -1) {
-            let endIndex = startIndex + valueStr.length;
-            if (segments.length > 0 && startIndex < segments[segments.length - 1].end) {
-                const nextIndex = line.indexOf(valueStr, segments[segments.length - 1].end);
-                if (nextIndex !== -1) {
-                    startIndex = nextIndex;
-                    endIndex = nextIndex + valueStr.length;
-                } else {
-                    continue;
-                }
-            }
+        if (startIndex === -1) {
+            continue;
+        }
 
-            segments.push({
-                start: startIndex,
-                end: endIndex,
-                field: field,
-                value: valueStr
-            });
+        const endIndex = startIndex + valueStr.length;
+        segments.push({
+            start: startIndex,
+            end: endIndex,
+            field: field,
+            value: valueStr
+        });
 
+        if (startIndex >= cursor) {
             cursor = endIndex;
         }
     }
@@ -242,6 +267,44 @@ function highlightMatchedLine(line, match, fieldColorMap, options = {}) {
     }
     
     return result;
+}
+
+function findAvailableIndex(line, value, segments, startAt) {
+    let index = line.indexOf(value, Math.max(0, startAt));
+    let fallbackIndex = -1;
+    while (index !== -1) {
+        const end = index + value.length;
+        const overlaps = segments.some(seg => index < seg.end && end > seg.start);
+        if (!overlaps) {
+            if (isBoundaryMatch(line, index, value)) {
+                return index;
+            }
+            if (fallbackIndex === -1) {
+                fallbackIndex = index;
+            }
+        }
+        index = line.indexOf(value, index + 1);
+    }
+    return fallbackIndex;
+}
+
+function isBoundaryMatch(line, index, value) {
+    const before = index > 0 ? line[index - 1] : '';
+    const afterIndex = index + value.length;
+    const after = afterIndex < line.length ? line[afterIndex] : '';
+    return isBoundaryChar(before) && isBoundaryChar(after);
+}
+
+function isBoundaryChar(char) {
+    if (!char) {
+        return true;
+    }
+    if (/\s/.test(char)) {
+        return true;
+    }
+    return char === '"' || char === '\'' || char === '[' || char === ']' ||
+        char === '(' || char === ')' || char === '{' || char === '}' ||
+        char === '<' || char === '>' || char === ',' || char === ':';
 }
 
 function escapeHtml(text) {
@@ -334,6 +397,26 @@ function buildOrderedEntries(fields, orderedFields) {
     return entries;
 }
 
+function buildFieldOrderFromLine(fields, line) {
+    const entries = Object.entries(fields).map(([key, value]) => {
+        if (value === null || value === '') {
+            return { key, index: Number.POSITIVE_INFINITY };
+        }
+        const valueStr = String(value);
+        const index = line ? line.indexOf(valueStr) : -1;
+        return { key, index: index === -1 ? Number.POSITIVE_INFINITY : index };
+    });
+
+    entries.sort((a, b) => {
+        if (a.index !== b.index) {
+            return a.index - b.index;
+        }
+        return a.key.localeCompare(b.key);
+    });
+
+    return entries.map(entry => entry.key);
+}
+
 function buildOrderedFields(fields, fieldOrder) {
     if (!fieldOrder || fieldOrder.length === 0) {
         return Object.keys(fields);
@@ -356,18 +439,6 @@ function buildOrderedFields(fields, fieldOrder) {
     });
 
     return ordered;
-}
-
-function resolveFieldType(field, value, fieldTypes) {
-    if (value === null) {
-        return 'null';
-    }
-
-    if (fieldTypes && fieldTypes[field]) {
-        return fieldTypes[field];
-    }
-
-    return typeof value;
 }
 
 function renderTestDataHighlights(data, fieldColorMap, fieldOrder = []) {
@@ -758,6 +829,11 @@ function applyTheme(mode) {
     if (themeToggleButton) {
         themeToggleButton.textContent = useDark ? 'Light mode' : 'Dark mode';
     }
+    if (lastResponseData) {
+        outputDiv.innerHTML = formatOutput(lastResponseData);
+    } else {
+        renderTestDataHighlights(null, {});
+    }
 }
 
 function loadThemePreference() {
@@ -792,16 +868,29 @@ function showCustomPatternError(message) {
     }
 }
 
-function openCustomPatternModal(focusAdd = false) {
+function setCustomPatternMode(mode) {
+    customPatternMode = mode;
+    if (customPatternAddSection) {
+        customPatternAddSection.classList.toggle('hidden', mode !== 'add');
+    }
+    if (customPatternListSection) {
+        customPatternListSection.classList.toggle('hidden', mode !== 'edit');
+    }
+}
+
+function openCustomPatternModal(mode = 'add') {
     if (!customPatternModal) {
         return;
     }
 
+    setCustomPatternMode(mode);
     customPatternModal.classList.remove('hidden');
     showCustomPatternError('');
-    loadCustomPatterns();
+    if (mode === 'edit') {
+        loadCustomPatterns();
+    }
 
-    if (focusAdd && customPatternNameInput) {
+    if (mode === 'add' && customPatternNameInput) {
         customPatternNameInput.focus();
     }
 }
@@ -916,15 +1005,12 @@ if (patternAddCustomButton) {
         if (customPatternNameInput) {
             customPatternNameInput.value = '';
         }
-        if (customPatternValueInput) {
-            customPatternValueInput.value = '';
-        }
-        openCustomPatternModal(true);
+        openCustomPatternModal('add');
     });
 }
 if (patternEditCustomButton) {
     patternEditCustomButton.addEventListener('click', () => {
-        openCustomPatternModal(false);
+        openCustomPatternModal('edit');
     });
 }
 if (customPatternCloseButton) {
@@ -935,14 +1021,19 @@ if (customPatternBackdrop) {
 }
 if (customPatternAddButton) {
     customPatternAddButton.addEventListener('click', async () => {
-        if (!customPatternNameInput || !customPatternValueInput) {
+        if (!customPatternNameInput) {
             return;
         }
 
-        const name = customPatternNameInput.value.trim();
-        const pattern = customPatternValueInput.value.trim();
-        if (!name || !pattern) {
-            showCustomPatternError('Name and pattern are required.');
+        const name = customPatternNameInput.value.trim().toUpperCase();
+        customPatternNameInput.value = name;
+        const pattern = patternInput.value.trim();
+        if (!name) {
+            showCustomPatternError('Pattern name is required.');
+            return;
+        }
+        if (!pattern) {
+            showCustomPatternError('Current grok pattern is empty.');
             return;
         }
 
@@ -959,13 +1050,19 @@ if (customPatternAddButton) {
             }
 
             customPatternNameInput.value = '';
-            customPatternValueInput.value = '';
             showCustomPatternError('');
-            await loadCustomPatterns();
             loadPatternNames();
+            patternInput.value = `%{${name}}`;
+            handleInput();
+            closeCustomPatternModal();
         } catch (err) {
             showCustomPatternError(err.message || 'Failed to add custom pattern.');
         }
+    });
+}
+if (customPatternNameInput) {
+    customPatternNameInput.addEventListener('input', () => {
+        customPatternNameInput.value = customPatternNameInput.value.toUpperCase();
     });
 }
 if (customPatternList) {
