@@ -68,6 +68,9 @@ function updateStatus(message, type = 'info') {
 }
 
 function escapePatternForCopy(pattern) {
+    if (looksEscapedPattern(pattern) && !hasUnescapedQuote(pattern)) {
+        return pattern;
+    }
     return pattern.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
@@ -75,15 +78,11 @@ function maybeUnescapePatternForCopy(pattern) {
     if (!looksEscapedPattern(pattern) || hasUnescapedQuote(pattern)) {
         return pattern;
     }
-    try {
-        return JSON.parse(`"${pattern}"`);
-    } catch (err) {
-        return pattern;
-    }
+    return unescapePatternForCopy(pattern);
 }
 
 function looksEscapedPattern(pattern) {
-    return ['\\\\', '\\"', '\\n', '\\t', '\\r', '\\[', '\\]', '\\{', '\\}']
+    return ['\\\\', '\\"', '\\n', '\\t', '\\r', '\\[', '\\]', '\\{', '\\}', '\\(', '\\)']
         .some(seq => pattern.includes(seq));
 }
 
@@ -100,6 +99,35 @@ function hasUnescapedQuote(pattern) {
         escaped = false;
     }
     return false;
+}
+
+function unescapePatternForCopy(pattern) {
+    let result = pattern.replace(/\\\\/g, '\\');
+    result = result.replace(/\\"/g, '"');
+    result = result.replace(/\\\[/g, '[');
+    result = result.replace(/\\\]/g, ']');
+    result = result.replace(/\\\{/g, '{');
+    result = result.replace(/\\\}/g, '}');
+    result = result.replace(/\\\(/g, '(');
+    result = result.replace(/\\\)/g, ')');
+    result = result.replace(/\\:/g, ':');
+    result = result.replace(/\\\./g, '.');
+    result = result.replace(/\\\?/g, '?');
+    result = result.replace(/\\\+/g, '+');
+    result = result.replace(/\\\*/g, '*');
+    result = result.replace(/\\\^/g, '^');
+    result = result.replace(/\\\$/g, '$');
+    result = result.replace(/\\\|/g, '|');
+    result = result.replace(/\\\//g, '/');
+    result = result.replace(/\\,/g, ',');
+    result = result.replace(/\\;/g, ';');
+    result = result.replace(/\\=/g, '=');
+    result = result.replace(/\\-/g, '-');
+    result = result.replace(/\\_/g, '_');
+    result = result.replace(/\\n/g, '\n');
+    result = result.replace(/\\t/g, '\t');
+    result = result.replace(/\\r/g, '\r');
+    return result;
 }
 
 function closePatternCopyMenu() {
