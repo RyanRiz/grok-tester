@@ -68,10 +68,7 @@ function updateStatus(message, type = 'info') {
 }
 
 function escapePatternForCopy(pattern) {
-    if (looksEscapedPattern(pattern) && !hasUnescapedQuote(pattern)) {
-        return pattern;
-    }
-    return JSON.stringify(pattern).slice(1, -1);
+    return pattern.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 function maybeUnescapePatternForCopy(pattern) {
