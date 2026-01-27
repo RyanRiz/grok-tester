@@ -23,6 +23,7 @@
         body.theme-dark .border-gray-300 { border-color: #475569; }
         body.theme-dark .bg-gray-50.text-gray-500 { color: #94a3b8; }
         body.theme-dark .hover\:bg-gray-50:hover { background-color: #1e293b; }
+        body.theme-dark .dark-badge { background-color: #92400e; color: #fef3c7; }
         body.theme-dark textarea,
         body.theme-dark input,
         body.theme-dark select {
@@ -74,11 +75,21 @@
                     <div class="flex justify-between items-center mb-2 px-3 py-2 bg-gray-100 rounded-lg">
                         <h2 class="text-lg font-semibold text-gray-800">Grok Pattern</h2>
                         <div class="flex flex-wrap items-center justify-end gap-2">
-                            <button id="patternCopy" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Copy</button>
+                            <div class="relative">
+                                <button id="patternCopyToggle" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50 inline-flex items-center gap-1">
+                                    Copy
+                                    <span class="text-[10px]">▾</span>
+                                </button>
+                                <div id="patternCopyMenu" class="hidden absolute right-0 mt-1 w-40 rounded-md border border-gray-200 bg-white shadow-lg z-50">
+                                    <button id="patternCopyPlain" class="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">Copy</button>
+                                    <button id="patternCopyEscaped" class="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">Copy escaped</button>
+                                </div>
+                            </div>
                             <button id="patternAddCustom" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Add custom</button>
                             <button id="patternEditCustom" class="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Edit custom</button>
                             <button id="patternSaveCustom" class="hidden px-2.5 py-1 text-xs font-semibold text-white bg-indigo-600 rounded hover:bg-indigo-500">Save</button>
                             <button id="patternCancelEdit" class="hidden px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded hover:bg-gray-50">Cancel</button>
+                            <span id="patternEscapedBadge" class="hidden px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 dark-badge">Escaped</span>
                             <span class="text-sm text-gray-600">Enter your grok pattern</span>
                         </div>
                     </div>

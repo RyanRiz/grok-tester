@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -214,6 +215,7 @@ type TestResponse struct {
 	Matched    int               `json:"matched,omitempty"`
 	FieldOrder []string          `json:"fieldOrder,omitempty"`
 	FieldTypes map[string]string `json:"fieldTypes,omitempty"`
+	Escaped    bool              `json:"escapedPattern,omitempty"`
 	Error      string            `json:"error,omitempty"`
 }
 
@@ -226,50 +228,75 @@ func TestPattern(sessionID string, req TestRequest) TestResponse {
 		}
 	}
 
+	patternToUse := req.Pattern
+	escapedPattern := false
+	if unescaped, ok := maybeUnescapePattern(req.Pattern); ok {
+		patternToUse = unescaped
+		escapedPattern = true
+	}
+
 	// Create grok instance with complete default patterns plus our custom patterns
-	g, err := grok.NewComplete(getCombinedPatterns(sessionID))
+	combinedPatterns := getCombinedPatterns(sessionID)
+	g, err := grok.NewComplete(combinedPatterns)
 	if err != nil {
 		return TestResponse{
 			Success: false,
 			Error:   fmt.Sprintf("Failed to initialize grok: %v", err),
+			Escaped: escapedPattern,
 		}
 	}
 
-	// Compile pattern with timeout (namedCapturesOnly = true to get only explicit field names)
-	compileChan := make(chan error, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), CompileTimeout)
-	defer cancel()
+	tryCompile := func(pattern string) error {
+		// Compile pattern with timeout (namedCapturesOnly = true to get only explicit field names)
+		compileChan := make(chan error, 1)
+		ctx, cancel := context.WithTimeout(context.Background(), CompileTimeout)
+		defer cancel()
 
-	go func() {
-		compileChan <- g.Compile(req.Pattern, true)
-	}()
+		go func() {
+			compileChan <- g.Compile(pattern, true)
+		}()
 
-	select {
-	case err := <-compileChan:
-		if err != nil {
+		select {
+		case err := <-compileChan:
+			return err
+		case <-ctx.Done():
+			return errors.New("Pattern compilation timeout (exceeded 2 seconds)")
+		}
+	}
+
+	if err := tryCompile(patternToUse); err != nil {
+		if escapedPattern {
+			patternToUse = req.Pattern
+			escapedPattern = false
+			if retryErr := tryCompile(patternToUse); retryErr != nil {
+				return TestResponse{
+					Success: false,
+					Error:   fmt.Sprintf("Pattern compilation failed: %v", retryErr),
+					Escaped: false,
+				}
+			}
+		} else {
 			return TestResponse{
 				Success: false,
 				Error:   fmt.Sprintf("Pattern compilation failed: %v", err),
+				Escaped: false,
 			}
-		}
-	case <-ctx.Done():
-		return TestResponse{
-			Success: false,
-			Error:   "Pattern compilation timeout (exceeded 2 seconds)",
 		}
 	}
 
-	fieldOrder, fieldTypes := parsePatternFields(req.Pattern, getCombinedPatterns(sessionID))
+	fieldOrder, fieldTypes := parsePatternFields(patternToUse, combinedPatterns)
 
 	// Split test data by newlines and parse each line
 	lines := strings.Split(req.TestData, "\n")
 	var allMatches []MatchResult
 	matchedCount := 0
+	totalLines := 0
 
 	for index, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
+		totalLines++
 
 		// Parse the line
 		matches, err := g.ParseTypedString(line)
@@ -287,10 +314,11 @@ func TestPattern(sessionID string, req TestRequest) TestResponse {
 	if matchedCount == 0 {
 		return TestResponse{
 			Success:    true,
-			Total:      len(lines),
+			Total:      totalLines,
 			Matched:    0,
 			FieldOrder: fieldOrder,
 			FieldTypes: fieldTypes,
+			Escaped:    escapedPattern,
 			Error:      "Pattern did not match any test data lines",
 		}
 	}
@@ -298,10 +326,11 @@ func TestPattern(sessionID string, req TestRequest) TestResponse {
 	return TestResponse{
 		Success:    true,
 		Matches:    allMatches,
-		Total:      len(lines),
+		Total:      totalLines,
 		Matched:    matchedCount,
 		FieldOrder: fieldOrder,
 		FieldTypes: fieldTypes,
+		Escaped:    escapedPattern,
 	}
 }
 
@@ -382,6 +411,48 @@ func normalizeFieldType(patternName, typeHint string) string {
 	default:
 		return "string"
 	}
+}
+
+func maybeUnescapePattern(pattern string) (string, bool) {
+	if !looksEscapedPattern(pattern) {
+		return pattern, false
+	}
+
+	if hasUnescapedQuote(pattern) {
+		return pattern, false
+	}
+
+	unescaped, err := strconv.Unquote(`"` + pattern + `"`)
+	if err != nil {
+		return pattern, false
+	}
+
+	return unescaped, true
+}
+
+func looksEscapedPattern(pattern string) bool {
+	escapedSequences := []string{`\\`, `\"`, `\n`, `\t`, `\r`, `\[`, `\]`, `\{`, `\}`}
+	for _, seq := range escapedSequences {
+		if strings.Contains(pattern, seq) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasUnescapedQuote(pattern string) bool {
+	escaped := false
+	for _, r := range pattern {
+		if r == '\\' {
+			escaped = !escaped
+			continue
+		}
+		if r == '"' && !escaped {
+			return true
+		}
+		escaped = false
+	}
+	return false
 }
 
 // GetPatternsForSession returns a formatted string of all available patterns for a session

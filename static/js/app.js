@@ -12,11 +12,15 @@ const outputViewJsonButton = document.getElementById('outputViewJson');
 const testDataCopyButton = document.getElementById('testDataCopy');
 const testDataClearButton = document.getElementById('testDataClear');
 const outputCopyJsonButton = document.getElementById('outputCopyJson');
-const patternCopyButton = document.getElementById('patternCopy');
+const patternCopyToggle = document.getElementById('patternCopyToggle');
+const patternCopyMenu = document.getElementById('patternCopyMenu');
+const patternCopyPlainButton = document.getElementById('patternCopyPlain');
+const patternCopyEscapedButton = document.getElementById('patternCopyEscaped');
 const patternAddCustomButton = document.getElementById('patternAddCustom');
 const patternEditCustomButton = document.getElementById('patternEditCustom');
 const patternSaveCustomButton = document.getElementById('patternSaveCustom');
 const patternCancelEditButton = document.getElementById('patternCancelEdit');
+const patternEscapedBadge = document.getElementById('patternEscapedBadge');
 const customPatternModal = document.getElementById('customPatternModal');
 const customPatternBackdrop = document.getElementById('customPatternBackdrop');
 const customPatternCloseButton = document.getElementById('customPatternClose');
@@ -61,6 +65,57 @@ function updateStatus(message, type = 'info') {
         default:
             statusSpan.className += 'bg-blue-100 text-blue-700';
     }
+}
+
+function escapePatternForCopy(pattern) {
+    if (looksEscapedPattern(pattern) && !hasUnescapedQuote(pattern)) {
+        return pattern;
+    }
+    return JSON.stringify(pattern).slice(1, -1);
+}
+
+function maybeUnescapePatternForCopy(pattern) {
+    if (!looksEscapedPattern(pattern) || hasUnescapedQuote(pattern)) {
+        return pattern;
+    }
+    try {
+        return JSON.parse(`"${pattern}"`);
+    } catch (err) {
+        return pattern;
+    }
+}
+
+function looksEscapedPattern(pattern) {
+    return ['\\\\', '\\"', '\\n', '\\t', '\\r', '\\[', '\\]', '\\{', '\\}']
+        .some(seq => pattern.includes(seq));
+}
+
+function hasUnescapedQuote(pattern) {
+    let escaped = false;
+    for (const char of pattern) {
+        if (char === '\\') {
+            escaped = !escaped;
+            continue;
+        }
+        if (char === '"' && !escaped) {
+            return true;
+        }
+        escaped = false;
+    }
+    return false;
+}
+
+function closePatternCopyMenu() {
+    if (patternCopyMenu) {
+        patternCopyMenu.classList.add('hidden');
+    }
+}
+
+function updateEscapedBadge(isEscaped) {
+    if (!patternEscapedBadge) {
+        return;
+    }
+    patternEscapedBadge.classList.toggle('hidden', !isEscaped);
 }
 
 function getFieldColors() {
@@ -566,6 +621,7 @@ function testPattern() {
         outputDiv.innerHTML = '<div class="text-gray-500 text-center py-10 italic">Enter both a pattern and test data to see results...</div>';
         renderTestDataHighlights(null, {});
         updateStatus('Ready', 'info');
+        updateEscapedBadge(false);
         saveSessionState();
         return;
     }
@@ -587,6 +643,7 @@ function testPattern() {
         lastResponseData = data;
         outputDiv.innerHTML = formatOutput(data);
         saveSessionState();
+        updateEscapedBadge(!!data.escapedPattern);
         if (data.success && data.matches && data.matches.length > 0) {
             updateStatus(`${data.matched}/${data.total} matched`, 'success');
         } else if (!data.success) {
@@ -603,6 +660,7 @@ function testPattern() {
         </div>`;
         renderTestDataHighlights(null, {});
         updateStatus('Error', 'error');
+        updateEscapedBadge(false);
         saveSessionState();
     });
 }
@@ -1012,12 +1070,30 @@ if (outputCopyJsonButton) {
         }
     });
 }
-if (patternCopyButton) {
-    patternCopyButton.addEventListener('click', async () => {
+if (patternCopyToggle && patternCopyMenu) {
+    patternCopyToggle.addEventListener('click', (event) => {
+        event.stopPropagation();
+        patternCopyMenu.classList.toggle('hidden');
+    });
+}
+if (patternCopyPlainButton) {
+    patternCopyPlainButton.addEventListener('click', async () => {
+        closePatternCopyMenu();
         try {
-            await navigator.clipboard.writeText(patternInput.value);
+            const plainPattern = maybeUnescapePatternForCopy(patternInput.value);
+            await navigator.clipboard.writeText(plainPattern);
         } catch (err) {
             console.error('Failed to copy pattern:', err);
+        }
+    });
+}
+if (patternCopyEscapedButton) {
+    patternCopyEscapedButton.addEventListener('click', async () => {
+        closePatternCopyMenu();
+        try {
+            await navigator.clipboard.writeText(escapePatternForCopy(patternInput.value));
+        } catch (err) {
+            console.error('Failed to copy escaped pattern:', err);
         }
     });
 }
@@ -1185,6 +1261,9 @@ window.addEventListener('resize', () => {
 document.addEventListener('click', (e) => {
     if (e.target !== patternInput && !autocompleteList?.contains(e.target)) {
         hideAutocomplete();
+    }
+    if (patternCopyMenu && !patternCopyMenu.contains(e.target) && e.target !== patternCopyToggle) {
+        closePatternCopyMenu();
     }
 });
 
