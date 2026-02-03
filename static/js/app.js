@@ -9,6 +9,9 @@ const testDataLineNumbers = document.getElementById('testDataLineNumbers');
 const testDataLineNumberContent = document.getElementById('testDataLineNumberContent');
 const outputViewTableButton = document.getElementById('outputViewTable');
 const outputViewJsonButton = document.getElementById('outputViewJson');
+const outputNestedToggle = document.getElementById('outputNestedToggle');
+const outputNestedWrap = document.getElementById('outputNestedWrap');
+const outputSearchInput = document.getElementById('outputSearch');
 const testDataCopyButton = document.getElementById('testDataCopy');
 const testDataClearButton = document.getElementById('testDataClear');
 const outputCopyJsonButton = document.getElementById('outputCopyJson');
@@ -37,6 +40,8 @@ const customPatternAddSection = document.getElementById('customPatternAddSection
 const customPatternListSection = document.getElementById('customPatternListSection');
 let testDataMeasure = null;
 let outputViewMode = 'table';
+let outputNested = false;
+let outputSearchQuery = '';
 let lastResponseData = null;
 const sessionStorageKey = 'grokTester.sessionState';
 const sessionStateTTL = 7 * 24 * 60 * 60 * 1000;
@@ -217,17 +222,27 @@ function formatOutput(data) {
     
     const matches = data.matches || [];
     const patternFieldOrder = Array.isArray(data.fieldOrder) ? data.fieldOrder : [];
+    const fieldTypes = data.fieldTypes || {};
+
+    const filteredMatches = filterMatchesBySearch(matches, outputSearchQuery);
+    if (outputSearchQuery && filteredMatches.length === 0) {
+        renderTestDataHighlights(data, {});
+        return `<div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
+            <strong class="text-yellow-800">No Match:</strong><br>
+            <span class="text-yellow-700">No results for "${escapeHtml(outputSearchQuery)}".</span>
+        </div>`;
+    }
     
     // Get all unique field names across all matches
     const allFields = new Set();
-    matches.forEach(match => {
+    filteredMatches.forEach(match => {
         const fields = match.fields || match;
         Object.keys(fields).forEach(key => allFields.add(key));
     });
     
     let orderedFields = buildFieldOrder(patternFieldOrder, allFields);
-    if (patternFieldOrder.length === 0 && matches.length > 0) {
-        const sample = matches[0];
+    if (patternFieldOrder.length === 0 && filteredMatches.length > 0) {
+        const sample = filteredMatches[0];
         const sampleFields = sample.fields || sample;
         const sampleLine = typeof sample.line === 'string' ? sample.line : '';
         const lineOrder = buildFieldOrderFromLine(sampleFields, sampleLine);
@@ -242,11 +257,11 @@ function formatOutput(data) {
     
     renderTestDataHighlights(data, fieldColorMap, orderedFields);
     if (outputViewMode === 'json') {
-        return html + renderJsonOutput(matches, orderedFields);
+        return html + renderJsonOutput(filteredMatches, orderedFields);
     }
     
     // Show results for each matched line
-    matches.forEach((match, index) => {
+    filteredMatches.forEach((match, index) => {
         const fields = match.fields || match;
         
         html += `<div class="mb-5 bg-white rounded-lg overflow-hidden shadow-sm">`;
@@ -254,11 +269,12 @@ function formatOutput(data) {
         
         // Field table
         html += '<table class="w-full">';
-        html += '<thead><tr class="bg-gray-100"><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Field</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Value</th></tr></thead>';
+        html += '<thead><tr class="bg-gray-100"><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Field</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Value</th><th class="px-3 py-2 text-left text-xs font-semibold text-gray-700">Type</th></tr></thead>';
         html += '<tbody>';
         
         const orderedEntries = buildOrderedEntries(fields, orderedFields);
         for (const [key, value] of orderedEntries) {
+            const type = resolveFieldType(key, value, fieldTypes);
             const isNull = value === null;
             const displayValue = isNull ? '<em class="text-gray-400">null</em>' : escapeHtml(String(value));
             const colors = fieldColorMap[key] || { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300' };
@@ -273,6 +289,7 @@ function formatOutput(data) {
                     </span>
                 </td>
                 <td class="px-3 py-2 text-gray-800 break-all">${valueTag}</td>
+                <td class="px-3 py-2 text-gray-500 italic text-xs">${escapeHtml(type)}</td>
             </tr>`;
         }
         
@@ -414,7 +431,7 @@ function renderJsonOutput(matches, orderedFields) {
         orderedEntries.forEach(([key, value]) => {
             obj[key] = value;
         });
-        return obj;
+        return outputNested ? buildNestedObject(obj) : obj;
     });
 
     const jsonString = JSON.stringify(orderedObjects, null, 2);
@@ -426,7 +443,10 @@ function getJsonOutputString(data) {
         return '';
     }
 
-    const matches = data.matches || [];
+    const matches = filterMatchesBySearch(data.matches || [], outputSearchQuery);
+    if (outputSearchQuery && matches.length === 0) {
+        return '';
+    }
     const allFields = new Set();
     matches.forEach(match => {
         const fields = match.fields || match;
@@ -441,7 +461,7 @@ function getJsonOutputString(data) {
         orderedEntries.forEach(([key, value]) => {
             obj[key] = value;
         });
-        return obj;
+        return outputNested ? buildNestedObject(obj) : obj;
     });
 
     return JSON.stringify(orderedObjects, null, 2);
@@ -490,6 +510,34 @@ function buildOrderedEntries(fields, orderedFields) {
     return entries;
 }
 
+function resolveFieldType(field, value, fieldTypes) {
+    if (value === null) {
+        return 'null';
+    }
+
+    if (fieldTypes && fieldTypes[field]) {
+        return fieldTypes[field];
+    }
+
+    return typeof value;
+}
+
+function filterMatchesBySearch(matches, query) {
+    const trimmed = (query || '').trim().toLowerCase();
+    if (!trimmed) {
+        return matches;
+    }
+
+    return matches.filter(match => {
+        const fields = match.fields || match;
+        return Object.entries(fields).some(([key, value]) => {
+            const keyMatch = key.toLowerCase().includes(trimmed);
+            const valueMatch = value !== null && value !== undefined && String(value).toLowerCase().includes(trimmed);
+            return keyMatch || valueMatch;
+        });
+    });
+}
+
 function buildFieldOrderFromLine(fields, line) {
     const entries = Object.entries(fields).map(([key, value]) => {
         if (value === null || value === '') {
@@ -532,6 +580,53 @@ function buildOrderedFields(fields, fieldOrder) {
     });
 
     return ordered;
+}
+
+function buildNestedObject(flatObject) {
+    const nested = {};
+    Object.entries(flatObject).forEach(([key, value]) => {
+        const path = parseFieldPath(key);
+        if (path.length === 0) {
+            return;
+        }
+
+        let cursor = nested;
+        path.forEach((segment, index) => {
+            if (!segment) {
+                return;
+            }
+
+            if (index === path.length - 1) {
+                cursor[segment] = value;
+                return;
+            }
+
+            if (!cursor[segment] || typeof cursor[segment] !== 'object') {
+                cursor[segment] = {};
+            }
+            cursor = cursor[segment];
+        });
+    });
+
+    return nested;
+}
+
+function parseFieldPath(field) {
+    const bracketMatches = [];
+    const bracketRegex = /\[([^\]]+)\]/g;
+    let match;
+    while ((match = bracketRegex.exec(field)) !== null) {
+        if (match[1]) {
+            bracketMatches.push(match[1]);
+        }
+    }
+    if (bracketMatches.length > 0) {
+        return bracketMatches;
+    }
+    if (field.includes('.')) {
+        return field.split('.').filter(Boolean);
+    }
+    return field ? [field] : [];
 }
 
 function renderTestDataHighlights(data, fieldColorMap, fieldOrder = []) {
@@ -881,6 +976,12 @@ function updateOutputViewButtons() {
     if (outputCopyJsonButton) {
         outputCopyJsonButton.classList.toggle('hidden', outputViewMode !== 'json');
     }
+    if (outputNestedWrap) {
+        outputNestedWrap.classList.toggle('hidden', outputViewMode !== 'json');
+    }
+    if (outputNestedToggle) {
+        outputNestedToggle.checked = outputNested;
+    }
 }
 
 function saveSessionState() {
@@ -889,6 +990,8 @@ function saveSessionState() {
             pattern: patternInput.value,
             testData: testDataInput.value,
             outputViewMode,
+            outputNested,
+            outputSearchQuery,
             lastResponseData,
             lastAccess: Date.now()
         };
@@ -1075,6 +1178,24 @@ testDataInput.addEventListener('scroll', syncTestDataHighlightScroll);
 if (outputViewTableButton && outputViewJsonButton) {
     outputViewTableButton.addEventListener('click', () => setOutputViewMode('table'));
     outputViewJsonButton.addEventListener('click', () => setOutputViewMode('json'));
+}
+if (outputNestedToggle) {
+    outputNestedToggle.addEventListener('change', () => {
+        outputNested = outputNestedToggle.checked;
+        if (lastResponseData) {
+            outputDiv.innerHTML = formatOutput(lastResponseData);
+        }
+        saveSessionState();
+    });
+}
+if (outputSearchInput) {
+    outputSearchInput.addEventListener('input', () => {
+        outputSearchQuery = outputSearchInput.value;
+        if (lastResponseData) {
+            outputDiv.innerHTML = formatOutput(lastResponseData);
+        }
+        saveSessionState();
+    });
 }
 if (testDataCopyButton) {
     testDataCopyButton.addEventListener('click', async () => {
@@ -1346,6 +1467,15 @@ window.addEventListener('DOMContentLoaded', () => {
         testDataInput.value = savedState.testData || '';
         if (savedState.outputViewMode) {
             outputViewMode = savedState.outputViewMode;
+        }
+        if (typeof savedState.outputNested === 'boolean') {
+            outputNested = savedState.outputNested;
+        }
+        if (typeof savedState.outputSearchQuery === 'string') {
+            outputSearchQuery = savedState.outputSearchQuery;
+            if (outputSearchInput) {
+                outputSearchInput.value = outputSearchQuery;
+            }
         }
         lastResponseData = savedState.lastResponseData || null;
         updateOutputViewButtons();

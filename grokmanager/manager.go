@@ -234,6 +234,7 @@ func TestPattern(sessionID string, req TestRequest) TestResponse {
 		patternToUse = unescaped
 		escapedPattern = true
 	}
+	patternToUse, _ = normalizeBracketFieldNames(patternToUse)
 
 	// Create grok instance with complete default patterns plus our custom patterns
 	combinedPatterns := getCombinedPatterns(sessionID)
@@ -453,6 +454,50 @@ func hasUnescapedQuote(pattern string) bool {
 		escaped = false
 	}
 	return false
+}
+
+func normalizeBracketFieldNames(pattern string) (string, bool) {
+	changed := false
+	updated := grokFieldPattern.ReplaceAllStringFunc(pattern, func(token string) string {
+		if len(token) < 4 {
+			return token
+		}
+		inner := token[2 : len(token)-1]
+		parts := strings.Split(inner, ":")
+		if len(parts) < 2 {
+			return token
+		}
+		fieldName := strings.TrimSpace(parts[1])
+		normalized, ok := normalizeBracketFieldName(fieldName)
+		if !ok {
+			return token
+		}
+		parts[1] = normalized
+		changed = true
+		return "%{" + strings.Join(parts, ":") + "}"
+	})
+	return updated, changed
+}
+
+var bracketFieldPattern = regexp.MustCompile(`\[(.*?)\]`)
+
+func normalizeBracketFieldName(field string) (string, bool) {
+	matches := bracketFieldPattern.FindAllStringSubmatch(field, -1)
+	if len(matches) == 0 {
+		return field, false
+	}
+
+	segments := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) > 1 && match[1] != "" {
+			segments = append(segments, match[1])
+		}
+	}
+	if len(segments) == 0 {
+		return field, false
+	}
+
+	return strings.Join(segments, "."), true
 }
 
 // GetPatternsForSession returns a formatted string of all available patterns for a session
