@@ -16,6 +16,10 @@ const patternCopyToggle = document.getElementById('patternCopyToggle');
 const patternCopyMenu = document.getElementById('patternCopyMenu');
 const patternCopyPlainButton = document.getElementById('patternCopyPlain');
 const patternCopyEscapedButton = document.getElementById('patternCopyEscaped');
+const patternSampleToggle = document.getElementById('patternSampleToggle');
+const patternSampleMenu = document.getElementById('patternSampleMenu');
+const patternSamplePlainButton = document.getElementById('patternSamplePlain');
+const patternSampleEscapedButton = document.getElementById('patternSampleEscaped');
 const patternAddCustomButton = document.getElementById('patternAddCustom');
 const patternEditCustomButton = document.getElementById('patternEditCustom');
 const patternSaveCustomButton = document.getElementById('patternSaveCustom');
@@ -133,6 +137,12 @@ function unescapePatternForCopy(pattern) {
 function closePatternCopyMenu() {
     if (patternCopyMenu) {
         patternCopyMenu.classList.add('hidden');
+    }
+}
+
+function closePatternSampleMenu() {
+    if (patternSampleMenu) {
+        patternSampleMenu.classList.add('hidden');
     }
 }
 
@@ -1101,6 +1111,12 @@ if (patternCopyToggle && patternCopyMenu) {
         patternCopyMenu.classList.toggle('hidden');
     });
 }
+if (patternSampleToggle && patternSampleMenu) {
+    patternSampleToggle.addEventListener('click', (event) => {
+        event.stopPropagation();
+        patternSampleMenu.classList.toggle('hidden');
+    });
+}
 if (patternCopyPlainButton) {
     patternCopyPlainButton.addEventListener('click', async () => {
         closePatternCopyMenu();
@@ -1120,6 +1136,30 @@ if (patternCopyEscapedButton) {
         } catch (err) {
             console.error('Failed to copy escaped pattern:', err);
         }
+    });
+}
+if (patternSamplePlainButton) {
+    patternSamplePlainButton.addEventListener('click', () => {
+        closePatternSampleMenu();
+        patternInput.value = '%{IPORHOST:remote_addr} %{DATA:remote_host} %{DATA:remote_user} \\[%{DATA:timestamp}\\] "%{WORD:http_method} %{DATA:request} %{DATA:http_version}" %{INT:status} %{INT:body_bytes_sent} "%{DATA:http_referer}" "%{DATA:user_agent}"';
+        testDataInput.value = [
+            '173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /zend/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"',
+            '173.249.11.249 - - [26/Jan/2026:10:08:49 +0800] "GET /ws/ec/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"',
+            '173.249.11.249 - - [26/Jan/2026:10:08:50 +0800] "GET /v2/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1" 401 633 "-" "libretail-http"'
+        ].join('\n');
+        handleInput();
+    });
+}
+if (patternSampleEscapedButton) {
+    patternSampleEscapedButton.addEventListener('click', () => {
+        closePatternSampleMenu();
+        patternInput.value = '\\\\[%{HTTPDERROR_DATE:timestamp}\\\\] \\\\[%{DATA:module}:%{LOGLEVEL:log_level}\\\\] \\\\[pid %{INT:pid}:tid %{INT:tid}\\\\](?: \\\\[client %{IPORHOST:client_ip}:%{INT:client_port}\\\\])? %{WORD:error_code}: %{GREEDYDATA:message}';
+        testDataInput.value = [
+            '[Tue Jan 27 06:28:57.036258 2026] [authz_core:error] [pid 1140163:tid 140207898736192] [client 107.170.62.119:59872] AH01630: client denied by server configuration: /home/horizon727/public_html/.env',
+            '[Tue Jan 27 06:28:57.498766 2026] [authz_core:error] [pid 1140162:tid 140207923914304] [client 107.170.62.119:59880] AH01630: client denied by server configuration: /home/horizon727/public_html/.git',
+            '[Tue Jan 27 06:49:31.693117 2026] [authz_core:error] [pid 1140162:tid 140207772911168] [client 185.76.10.137:62452] AH01630: client denied by server configuration: /home/horizon727/public_html/.env'
+        ].join('\n');
+        handleInput();
     });
 }
 if (patternAddCustomButton) {
@@ -1289,6 +1329,9 @@ document.addEventListener('click', (e) => {
     }
     if (patternCopyMenu && !patternCopyMenu.contains(e.target) && e.target !== patternCopyToggle) {
         closePatternCopyMenu();
+    }
+    if (patternSampleMenu && !patternSampleMenu.contains(e.target) && e.target !== patternSampleToggle) {
+        closePatternSampleMenu();
     }
 });
 
