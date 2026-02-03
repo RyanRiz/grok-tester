@@ -1229,12 +1229,14 @@ if (outputCopyJsonButton) {
 if (patternCopyToggle && patternCopyMenu) {
     patternCopyToggle.addEventListener('click', (event) => {
         event.stopPropagation();
+        closePatternSampleMenu();
         patternCopyMenu.classList.toggle('hidden');
     });
 }
 if (patternSampleToggle && patternSampleMenu) {
     patternSampleToggle.addEventListener('click', (event) => {
         event.stopPropagation();
+        closePatternCopyMenu();
         patternSampleMenu.classList.toggle('hidden');
     });
 }
