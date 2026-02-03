@@ -57,20 +57,20 @@
             background: linear-gradient(
                 to right,
                 #ffffff 0,
-                #ffffff 3rem,
-                rgba(148, 163, 184, 0.25) 3rem,
-                rgba(148, 163, 184, 0.25) calc(3rem + 1px),
-                transparent calc(3rem + 1px)
+                #ffffff 4rem,
+                rgba(148, 163, 184, 0.25) 4rem,
+                rgba(148, 163, 184, 0.25) calc(4rem + 1px),
+                transparent calc(4rem + 1px)
             );
         }
         body.theme-dark #testDataHighlights {
             background: linear-gradient(
                 to right,
                 #0b1220 0,
-                #0b1220 3rem,
-                rgba(51, 65, 85, 0.8) 3rem,
-                rgba(51, 65, 85, 0.8) calc(3rem + 1px),
-                transparent calc(3rem + 1px)
+                #0b1220 4rem,
+                rgba(51, 65, 85, 0.8) 4rem,
+                rgba(51, 65, 85, 0.8) calc(4rem + 1px),
+                transparent calc(4rem + 1px)
             );
         }
         #testDataLineNumbers {
@@ -148,17 +148,17 @@
                     </div>
                     <div class="test-data-shell relative flex flex-col flex-1 min-h-0 border-2 border-gray-300 rounded-lg bg-white transition-colors focus-within:border-gray-500 overflow-hidden">
                         <div id="testDataHighlights" class="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
-                            <div id="testDataLineNumbers" class="absolute inset-y-0 left-0 w-12 bg-white">
+                            <div id="testDataLineNumbers" class="absolute inset-y-0 left-0 w-16 bg-white">
                                 <div id="testDataLineNumberContent" class="p-4 pr-3 font-mono text-sm leading-6 text-right text-gray-400 whitespace-pre"></div>
                             </div>
-                            <div id="testDataHighlightContent" class="p-4 pl-16 font-mono text-sm leading-6 whitespace-pre-wrap break-words text-transparent"></div>
+                            <div id="testDataHighlightContent" class="p-4 pl-20 font-mono text-sm leading-6 whitespace-pre-wrap break-words text-transparent"></div>
                         </div>
                         <textarea 
                             id="testData" 
                             placeholder="Example: 192.168.1.1 GET /index.html"
                             wrap="soft"
                             spellcheck="false"
-                            class="relative z-10 flex-1 w-full min-h-0 p-4 pl-16 font-mono text-sm leading-6 resize-none bg-transparent focus:outline-none overflow-y-auto"
+                            class="relative z-10 flex-1 w-full min-h-0 p-4 pl-20 font-mono text-sm leading-6 resize-none bg-transparent focus:outline-none overflow-y-auto"
                         ></textarea>
                     </div>
                     <div class="mt-2 text-sm text-gray-600">
