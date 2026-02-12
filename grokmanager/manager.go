@@ -88,7 +88,7 @@ var squidPatterns string
 var zeekPatterns string
 
 const (
-	MaxPatternSize = 1024 // 1KB
+	MaxPatternSize = 1 * 1024 * 1024 // 1MB
 	CompileTimeout = 2 * time.Second
 )
 
